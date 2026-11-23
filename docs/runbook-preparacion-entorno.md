@@ -13,7 +13,8 @@ Nov 22, 2026 · Registro de lo que se hizo para preparar la clase demostrativa, 
 | JDK | Eclipse Temurin 25 (la misma versión que el proyecto del equipo) |
 | Git | 2.51 para Windows |
 | Claude Code | 2.1.330 (instalador nativo), con la sesión de la suscripción Claude Pro |
-| Repositorio | `JosephP2001/arqPj`, rama `main`, clonado en `D:\Arquitectura\Git\arqPj` |
+| Repositorio | `JosephP2001/arqPj`, clonado en `D:\Arquitectura\Git\arqPj`. Ramas: `develop` (punto de partida de la clase) y `demo/respaldo` (solución completa) |
+| Proyectos | Backend Spring Boot con Gradle en `backend/library`; frontend React + Vite en `frontend` |
 | Confluence | Sitio Atlassian Cloud Free nuevo, espacio **Biblioteca UCE** (clave `BIB`) |
 | Navegador predeterminado | Chrome (todos los inicios de sesión se hacen ahí) |
 
@@ -28,6 +29,7 @@ Nov 22, 2026 · Registro de lo que se hizo para preparar la clase demostrativa, 
 7. Conectar Claude Code con Confluence (MCP)
 8. Crear las páginas de DDD con Claude
 9. Figma (pendiente)
+10. Comprobar que el proyecto compila
 
 ---
 
@@ -63,7 +65,7 @@ git clone https://github.com/JosephP2001/arqPj.git
 
 **Error que se cometió:** `git clonehttps://...`. Debe haber un espacio entre `clone` y la dirección.
 
-**Rama principal:** el repo estaba vacío y la primera rama subida quedó como principal. Se renombró a `main`:
+**Rama principal:** el repo estaba vacío y la primera rama subida quedó como principal. Se renombró a `main` (hoy el trabajo de la clase vive en `develop`; ver el runbook de la clase):
 
 ```bat
 git branch -m main
@@ -126,6 +128,7 @@ claude
 3. **SDK** → **Download JDK…** → Version **25**, Vendor **Eclipse Temurin** → Download.
    - No uses la versión que IntelliJ propone por defecto (era la 27, que no es LTS) ni el JDK de Oracle descargado desde la web.
 4. **Language level:** **25 - Compact source files, module imports, etc.** (sin "Preview") → **OK**.
+5. **Gradle:** abre `backend/library/build.gradle` → **Load Gradle Project**. Luego Settings → Build, Execution, Deployment → Build Tools → Gradle → **Gradle JVM** = el JDK 25. Si queda en 21, la compilación falla porque el proyecto pide Java 25.
 
 **Claude dentro de IntelliJ, de dos formas:**
 
@@ -149,7 +152,7 @@ claude
 Desde la terminal de IntelliJ, en la raíz del repo:
 
 ```bat
-git pull origin main
+git pull origin develop
 claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp
 claude
 ```
@@ -182,18 +185,35 @@ El contenido está en `docs/confluence-demo-biblioteca.md`. En Claude, con el **
 
 ```text
 Lee docs/confluence-demo-biblioteca.md. En el espacio "Biblioteca UCE" (clave BIB)
-del sitio <tu-sitio>.atlassian.net, crea una página padre "Demo Biblioteca"
+del sitio <tu-sitio>.atlassian.net, crea una página padre "Demo UCE Library"
 y, dentro, una página hija por cada sección "##" del archivo, con el mismo
 título y su contenido. Muéstrame el plan antes de crear nada.
 ```
 
 Revisa el plan, apruébalo y comprueba en Confluence que existen las páginas 5 a 10 y la de referencia de Figma.
 
+> Las páginas ya existen y usan la terminología en inglés (Copy, Loan, Member, BR-01…). `docs/confluence-demo-biblioteca.md` es su copia; si cambias una, cambia la otra.
+
 ## 9. Figma (pendiente)
 
 - Cuenta con el plan Education (figma.com/education).
-- Wireframe de la pantalla **Prestar ejemplar**, con los campos que figuran al final de `docs/confluence-demo-biblioteca.md`.
+- Wireframe de la pantalla **Lend copy**, con los campos que figuran al final de `docs/confluence-demo-biblioteca.md` (Copy code, Member ID, Due date, botón Lend y el mensaje de BR-01).
 - Conector MCP de Figma: por configurar y probar. Si no funciona, usa capturas de la pantalla (plan B).
+
+## 10. Comprobar que el proyecto compila
+
+En la terminal de IntelliJ (PowerShell), con `JAVA_HOME` apuntando al JDK 25:
+
+```powershell
+$env:JAVA_HOME = "<ruta-del-JDK-25>"
+cd backend\library
+.\gradlew test
+cd ..\..\frontend
+npm install
+npm run build
+```
+
+Las dos cosas deben terminar en verde. La primera ejecución de `gradlew` descarga Gradle y las dependencias: hazla el día anterior, no en clase.
 
 ---
 
@@ -204,7 +224,7 @@ Hazlo **en vivo solo si el conector ya funcionó el día anterior**. Si no, mues
 1. Terminal de IntelliJ (Alt+F12): `claude mcp list` → "Así sabe Claude a qué fuentes externas puede acceder".
 2. Explica el comando que lo agregó: `claude mcp add --transport http atlassian <url>`. Una línea basta para conectar una fuente de contexto.
 3. `claude` → `/mcp` → muestra **atlassian** conectado y su lista de herramientas.
-4. Prueba en vivo: "lista las páginas hijas de Demo Biblioteca".
+4. Prueba en vivo: "lista las páginas hijas de Demo UCE Library".
 5. Mensaje: "Claude no adivina el lenguaje ubicuo: lo lee de nuestra documentación".
 
 **Para repetir la conexión completa frente al grupo:** `claude mcp remove atlassian`, luego los pasos 7.1 a 7.3. El inicio de sesión en Chrome será rápido si ya tienes la sesión de Atlassian abierta.
@@ -220,4 +240,5 @@ Hazlo **en vivo solo si el conector ya funcionó el día anterior**. Si no, mues
 | `'claude' is not recognized` | `.local\bin` no está en el PATH | Agregarlo al PATH y abrir una terminal nueva |
 | `claude` no se reconoce **en la terminal de IntelliJ**, pero sí en CMD | IntelliJ estaba abierto cuando se cambió el PATH | Cerrar IntelliJ por completo (File → Exit) y abrirlo de nuevo; o, en PowerShell: `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')` |
 | IntelliJ propone el JDK 27 | Es la versión más nueva, pero no es LTS | Elegir Temurin 25 |
+| `./gradlew` falla con un error de toolchain o de versión de Java | `JAVA_HOME` (o la Gradle JVM de IntelliJ) apunta a Java 21 | Apuntarlo al JDK 25 |
 | El Confluence existente era de otro proyecto | — | Sitio y espacio nuevos y exclusivos |

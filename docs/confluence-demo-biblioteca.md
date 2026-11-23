@@ -1,8 +1,8 @@
-# Demo Biblioteca UCE — contenido para Confluence
+# Demo UCE Library — contenido del Confluence
 
-Cada sección `##` es una página de Confluence. Copia el contenido de cada una en una página con el mismo título, dentro de un espacio o página padre llamado **"Demo Biblioteca"**.
+Copia en Markdown de las páginas de la demo en el espacio **Biblioteca UCE** (clave `BIB`) de `josephp2001.atlassian.net`, bajo la página padre **"Demo UCE Library"**. Terminología del dominio en inglés.
 
-Este archivo también es el **plan B** del bloque 5: si el conector MCP no funciona, se le pide a Claude que lea este archivo.
+**La fuente de verdad es el Confluence.** Este archivo es el **plan B** del bloque 5: si el conector MCP no funciona, se le pide a Claude que lea este archivo. Si cambias una página en el Confluence, actualiza también este archivo.
 
 ---
 
@@ -10,16 +10,16 @@ Este archivo también es el **plan B** del bloque 5: si el conector MCP no funci
 
 | Término | Definición | En el código |
 | --- | --- | --- |
-| Lector | Estudiante o docente registrado que puede llevarse ejemplares | `LectorId` (en Préstamos solo se usa el identificador) |
-| Obra | Libro como contenido: título, autor, edición | `ObraId` (la clase `Obra` vive en Catálogo) |
-| Ejemplar | Copia física de una obra, con código de inventario | Agregado `Ejemplar`, identificador `EjemplarId` |
-| Préstamo | Entrega de un ejemplar a un lector por un período | `Prestamo` (parte del agregado `Ejemplar`) |
-| Período de préstamo | Fecha de entrega y fecha límite de devolución | Objeto de valor `PeriodoPrestamo` |
-| Prestar | Acción de entregar un ejemplar disponible a un lector | Método `Ejemplar.prestar(lectorId, periodo)` |
-| Devolver | Acción de recibir un ejemplar prestado | Método `Ejemplar.devolver()` |
-| Disponible | Estado de un ejemplar que puede prestarse | `Ejemplar.estaDisponible()` |
+| Member | Estudiante o docente registrado que puede llevarse una Copy | `MemberId` (en Lending solo se usa el identificador) |
+| Book | El libro como contenido: título, autor, edición | `BookId` (la clase `Book` vive en Catalog) |
+| Copy | Copia física de un Book, con código de inventario | Agregado `Copy`, identificador `CopyId` |
+| Loan | Entrega de una Copy a un Member por un período | `Loan` (parte del agregado `Copy`) |
+| Loan period | Fecha de entrega y fecha límite de devolución | Objeto de valor `LoanPeriod` |
+| Lend | Acción de entregar una Copy disponible a un Member | Método `Copy.lend(memberId, period)` |
+| Return | Acción de recibir una Copy prestada | Método `Copy.returnCopy()` (`return` es palabra reservada en Java) |
+| Available | Estado de una Copy que puede prestarse | `Copy.isAvailable()` |
 
-**Términos que no se usan:** "Libro" (es ambiguo entre Obra y Ejemplar), "Usuario" (se dice Lector), "Book", "Loan".
+**Términos que no se usan:** "User" (se dice Member), "Item", "Book" para referirse a la copia física (eso es Copy), y los nombres en español del modelo anterior (Lector, Obra, Ejemplar, Préstamo).
 
 ---
 
@@ -27,11 +27,11 @@ Este archivo también es el **plan B** del bloque 5: si el conector MCP no funci
 
 | Código | Regla | Quién la protege | Prueba esperada |
 | --- | --- | --- | --- |
-| RN-01 | Un ejemplar prestado no puede volver a prestarse hasta que se devuelva | Agregado `Ejemplar` | Prestar un ejemplar ya prestado lanza `EjemplarNoDisponible` |
-| RN-02 | La devolución de un ejemplar lo deja disponible | Agregado `Ejemplar` | Después de `devolver()`, `estaDisponible()` es verdadero |
-| RN-03 | Un lector no puede tener más de tres préstamos activos | Por definir (tarea) | El cuarto préstamo falla |
+| BR-01 | Una Copy prestada no puede volver a prestarse hasta que se devuelva | Agregado `Copy` | Prestar una Copy ya prestada lanza `CopyNotAvailableException` |
+| BR-02 | La devolución de una Copy la deja Available | Agregado `Copy` | Después de `returnCopy()`, `isAvailable()` es verdadero |
+| BR-03 | Un Member no puede tener más de tres Loans activos | Por definir (tarea) | El cuarto Loan falla |
 
-Las reglas describen el negocio, no la interfaz: "el botón Prestar se deshabilita" no es una regla, es una funcionalidad.
+Las reglas describen el negocio, no la interfaz: "el botón Lend se deshabilita" no es una regla, es una funcionalidad.
 
 ---
 
@@ -39,9 +39,9 @@ Las reglas describen el negocio, no la interfaz: "el botón Prestar se deshabili
 
 | Subdominio | Tipo | Por qué |
 | --- | --- | --- |
-| Préstamos | Core | Es lo que diferencia el servicio de la biblioteca; aquí están las reglas |
-| Catálogo | Soporte | Necesario, pero es un registro de obras sin reglas complejas |
-| Lectores | Genérico/soporte | Datos del lector; podría venir del sistema académico de la UCE |
+| Lending | Core | Es lo que diferencia el servicio de la biblioteca; aquí están las reglas |
+| Catalog | Soporte | Necesario, pero es un registro de Books sin reglas complejas |
+| Members | Genérico/soporte | Datos del Member; podría venir del sistema académico de la UCE |
 
 ---
 
@@ -49,27 +49,27 @@ Las reglas describen el negocio, no la interfaz: "el botón Prestar se deshabili
 
 | Contexto | Paquete | Expone | Consume |
 | --- | --- | --- | --- |
-| Préstamos | `ec.edu.uce.biblioteca.prestamos` | Eventos `EjemplarPrestado`, `EjemplarDevuelto` | `ObraId`, `LectorId` |
-| Catálogo | `ec.edu.uce.biblioteca.catalogo` | `ObraId` y datos de la obra | — |
-| Lectores | `ec.edu.uce.biblioteca.lectores` | `LectorId` y estado del lector | — |
+| Lending | `ec.edu.uce.library.lending` | Eventos `CopyLent`, `CopyReturned` | `BookId`, `MemberId` |
+| Catalog | `ec.edu.uce.library.catalog` | `BookId` y datos del Book | — |
+| Members | `ec.edu.uce.library.members` | `MemberId` y estado del Member | — |
 
-**Relaciones:** Préstamos es cliente de Catálogo y de Lectores, pero solo guarda sus identificadores. Ningún contexto comparte clases de entidad con otro.
+**Relaciones:** Lending es cliente de Catalog y de Members, pero solo guarda sus identificadores. Ningún contexto comparte clases de entidad con otro.
 
 **Capas dentro de cada contexto:** `domain` (sin Spring), `application` (casos de uso) e `infrastructure` (REST, JPA). Las dependencias apuntan hacia adentro.
 
 ---
 
-## 9 · Modelo táctico (contexto Préstamos)
+## 9 · Modelo táctico (contexto Lending)
 
 | Elemento | Tipo | Responsabilidad |
 | --- | --- | --- |
-| `Ejemplar` | Agregado (raíz) | Protege RN-01 y RN-02 |
-| `EjemplarId` | Objeto de valor | Identidad del ejemplar (código de inventario) |
-| `Prestamo` | Entidad interna | Lector y período del préstamo activo |
-| `PeriodoPrestamo` | Objeto de valor | Fecha de entrega y fecha límite; la límite debe ser posterior a la de entrega |
-| `EjemplarNoDisponible` | Excepción de dominio | Se lanza al violar RN-01 |
-| `PrestarEjemplar` | Caso de uso (application) | Carga el ejemplar, llama a `prestar`, guarda y publica el evento |
-| `EjemplarRepositorio` | Puerto (interfaz en domain) | Implementado en infrastructure |
+| `Copy` | Agregado (raíz) | Protege BR-01 y BR-02 |
+| `CopyId` | Objeto de valor | Identidad de la Copy (código de inventario) |
+| `Loan` | Entidad interna | Member y período del Loan activo |
+| `LoanPeriod` | Objeto de valor | Fecha de entrega y fecha límite; la límite debe ser posterior a la de entrega |
+| `CopyNotAvailableException` | Excepción de dominio | Se lanza al violar BR-01 |
+| `LendCopy` | Caso de uso (application) | Carga la Copy, llama a `lend`, guarda y publica el evento |
+| `CopyRepository` | Puerto (interfaz en domain) | Implementado en infrastructure |
 
 ---
 
@@ -77,17 +77,17 @@ Las reglas describen el negocio, no la interfaz: "el botón Prestar se deshabili
 
 | Evento | Cuándo ocurre | Datos | Quién podría escucharlo |
 | --- | --- | --- | --- |
-| `EjemplarPrestado` | Al prestar con éxito | `EjemplarId`, `LectorId`, `PeriodoPrestamo` | Notificaciones (recordatorio de devolución) |
-| `EjemplarDevuelto` | Al devolver | `EjemplarId`, `LectorId`, fecha | Catálogo (estadísticas de uso) |
+| `CopyLent` | Al prestar con éxito | `CopyId`, `MemberId`, `LoanPeriod` | Notificaciones (recordatorio de devolución) |
+| `CopyReturned` | Al devolver | `CopyId`, `MemberId`, fecha | Catalog (estadísticas de uso) |
 
 ---
 
-## Figma · Pantalla "Prestar ejemplar" (referencia para el wireframe)
+## Figma · Pantalla "Lend copy" (referencia para el wireframe)
 
-Campos del formulario, que serán la entrada del caso de uso `PrestarEjemplar`:
+Campos del formulario, que serán la entrada del caso de uso `LendCopy`:
 
-1. **Código de ejemplar** (texto, obligatorio)
-2. **Cédula o código del lector** (texto, obligatorio)
-3. **Fecha límite de devolución** (fecha; por defecto, hoy + 15 días)
-4. Botón **Prestar**
-5. Mensaje de error: "El ejemplar no está disponible" (RN-01)
+1. **Copy code** (texto, obligatorio)
+2. **Member ID**: cédula o código del Member (texto, obligatorio)
+3. **Due date**: fecha límite de devolución (fecha; por defecto, hoy + 15 días)
+4. Botón **Lend**
+5. Mensaje de error: "The copy is not available" (BR-01)
