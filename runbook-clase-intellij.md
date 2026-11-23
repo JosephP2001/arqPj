@@ -7,7 +7,7 @@ Nov 22, 2026 · @JoeyOut · versión 2 (decisiones tomadas)
 | Decisión | Valor |
 | --- | --- |
 | Lenguaje y framework | Java 25 (igual que el proyecto del equipo) + Spring Boot |
-| Build | Maven (`mvn test`) |
+| Build | Gradle, Groovy DSL (./gradlew test) ||
 | Duración | 60 minutos |
 | Dominio del ejercicio | Préstamo de libros en la biblioteca universitaria |
 | Paquete raíz (ejemplo) | `ec.edu.uce.biblioteca` |
@@ -34,7 +34,7 @@ Al terminar la clase, los estudiantes habrán visto en vivo cómo se arranca un 
 Prueba todo en la misma computadora y en la misma red que usarás en clase.
 
 - [ ] **Licencia de IntelliJ.** Pide el GitHub Student Developer Pack (education.github.com) con el correo `@uce.edu.ec` o con el certificado de matrícula, y luego vincúlalo en jetbrains.com/student con la opción GitHub. Si no llega a tiempo, usa la prueba gratuita o la edición gratuita de IntelliJ: alcanza para esta demo (Maven, JUnit, terminal y el plugin de Claude Code).
-- [ ] Proyecto creado en start.spring.io (Java 25, Maven, dependencia Spring Web), abierto en IntelliJ y compilando.
+- [ ] Proyecto creado en start.spring.io (Java 25, Groovy, dependencia Spring Web), abierto en IntelliJ y compilando.
 - [ ] `mvn test` en verde desde la terminal integrada.
 - [ ] Paquetes de los tres contextos ya creados (`prestamos`, `catalogo`, `lectores`) con sus capas vacías. En 60 minutos no conviene crearlos en vivo.
 - [ ] Claude Code instalado y con la sesión iniciada; `claude` responde en la terminal integrada de IntelliJ.
@@ -139,7 +139,7 @@ Ciclo: dar contexto, pedir un plan, aprobarlo, revisar el diff y ejecutar la pru
 - Resumen en tres líneas del sistema de préstamos de la biblioteca y enlace al Confluence.
 - Estructura de paquetes del bloque 2 y la regla de dependencia hacia adentro.
 - Convención: los nombres salen del lenguaje ubicuo y las reglas viven en el agregado.
-- Java 25, Spring Boot, Maven. Pruebas: `mvn test`. Las pruebas de `domain` son JUnit 5 sin Spring.
+- Java 25, Spring Boot, Gradle (Groovy DSL). Pruebas: `mvn test`. Las pruebas de `domain` son JUnit 5 sin Spring.
 
 **Prompt de la demo (sin contexto externo)**
 
