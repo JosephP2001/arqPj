@@ -1,6 +1,6 @@
 # Demo Biblioteca UCE — contenido del Confluence
 
-Copia en Markdown de las páginas de la demo en el espacio **Biblioteca UCE** (clave `BIB`) de `josephp2001.atlassian.net`, bajo la página padre **"Demo Biblioteca UCE"**. Incluye completas las páginas 5 a 10 y extractos de las páginas 4, 11, 12 y 13. Los diagramas Mermaid de Confluence no se copian: aquí quedan las tablas que los acompañan.
+Copia en Markdown de las páginas de la demo en el espacio **Biblioteca UCE** (clave `BIB`) de `josephp2001.atlassian.net`, bajo la página padre **"Demo Biblioteca UCE"**. Incluye completas las páginas 5 a 10 y extractos de las páginas 4, 11, 12 y 13. Sincronizada con el Confluence el 23/11/2026. Los diagramas Mermaid de Confluence no se copian: aquí quedan las tablas que los acompañan.
 
 **Convención de idioma (ADR-007):** el negocio, la interfaz y la documentación van en español (Ejemplar, Lector, Prestar); el código y los términos técnicos van en inglés (`Copy`, `Member`, `lend`, `BR-01`). La equivalencia está en la columna "Nombre en el código" del glosario (página 5).
 
@@ -57,6 +57,30 @@ Copia en Markdown de las páginas de la demo en el espacio **Biblioteca UCE** (c
 | Nombres de clase en español (`Ejemplar`, `Lector`, `Prestamo`) | `Copy`, `Member`, `Loan` | El código va en inglés |
 | Términos en inglés en pantalla ("Copy", "Member", "Lend") | Ejemplar, Lector, Prestar | La interfaz va en español, como en Figma |
 | RN-01, RN-02… | `BR-01`, `BR-02`… | Un solo código de regla en todos los artefactos |
+
+### Regla de idioma (ADR-007)
+
+Cada concepto tiene un nombre de negocio en español y un nombre en el código en inglés (columna **Nombre en el código** del glosario). Esta tabla dice cuál se usa en cada lugar.
+
+| Dónde | Idioma | Ejemplo |
+| --- | --- | --- |
+| **Código**: paquetes, clases, métodos, campos, eventos, excepciones, nombres de pruebas, campos y mensajes de la API, commits | Inglés, tomado solo de la columna **Nombre en el código**. Nunca identificadores en español (`EjemplarPrestado`, `codigoEjemplar`). | `Copy.lend()`, `CopyLent`, `copyCode`, `br01_lendingALentCopyThrowsCopyNotAvailableException` |
+| **Negocio, pantalla y documentación** (texto corrido, reglas, mensajes) | Español, con el término del negocio del glosario | "Un ejemplar prestado no puede volver a prestarse hasta que se devuelva." |
+| **La documentación nombra un elemento del código** | El nombre en inglés, en formato de código | "La regla la protege el agregado `Copy` en `lend`." |
+| **Figma** | Textos de pantalla y nombres de capas en español; cuando una pantalla muestra una regla o un evento, usa el código: `BR-01`, `CopyLent` | Capa `codigoEjemplar` → campo `copyCode` (trazabilidad en la página 13) |
+
+#### Términos que no se traducen
+
+Se escriben igual en el código, la documentación y la conversación:
+
+| Tipo | Términos |
+| --- | --- |
+| Códigos de regla | `BR-xx` (no RN-xx) |
+| Patrones DDD sin traducción habitual | Core, Context Map, ACL, Handoff, DDD |
+| Términos técnicos | API, endpoint, frontend, backend, commit, branch, merge, pull request, tag, prompt, MCP, runbook |
+| Productos y tecnologías | Spring Boot, Java, Gradle, React, TypeScript, Vite, MUI, H2, JPA, Figma, Confluence, Claude Code, IntelliJ |
+
+Los conceptos DDD que ya tienen nombre en español se escriben en español: agregado, objeto de valor, entidad, evento de dominio, caso de uso, puerto, subdominio, contexto delimitado.
 
 ---
 
@@ -141,9 +165,10 @@ Paquete: `ec.edu.uce.library.lending.domain` (Java puro, sin Spring). Implementa
 | `MemberId` | Lector (identificador) | Objeto de valor | Identifica al lector dentro de Lending (cédula o código) |
 | `Loan` | Préstamo | Entidad interna | `MemberId` y `LoanPeriod` del préstamo activo |
 | `LoanPeriod` | Período de préstamo | Objeto de valor (`record`) | `lentOn` y `dueOn`; `dueOn` debe ser posterior a `lentOn` |
-| `CopyNotAvailableException` | Ejemplar no disponible | Excepción de dominio | Se lanza al violar `BR-01` |
+| `CopyNotAvailableException` | Ejemplar no disponible | Excepción de dominio | Se lanza al violar `BR-01`; lleva la fecha límite (`dueOn`) del préstamo activo para que la pantalla diga hasta cuándo está prestado |
 | `CopyLent`, `CopyReturned` | Ejemplar prestado / devuelto | Eventos de dominio | Los devuelven `lend` y `returnCopy` (página 10) |
 | `CopyRepository` | — | Puerto (interfaz en `domain`) | `findById(CopyId)` y `save(Copy)`; implementado con JPA en `infrastructure` |
+| `DomainEventPublisher` | — | Puerto (interfaz en `application`) | `publish(event)`; lo usa el caso de uso después de guardar. Implementado en `infrastructure` con el `ApplicationEventPublisher` de Spring |
 | `LendCopy` | Prestar ejemplar | Caso de uso (`application`) | Carga el `Copy`, llama a `lend`, guarda y publica `CopyLent` |
 | `BookId` | Obra (identificador) | Objeto de valor | **Propuesto:** todavía no está en `Copy` |
 
@@ -181,7 +206,7 @@ Los eventos se nombran en pasado. El agregado los **devuelve** (`lend` y `return
 
 ## 4 · Línea gráfica (extracto: Voz y tono)
 
-La interfaz siempre está en español. La API responde mensajes en inglés (por ejemplo, "The copy is not available"); el frontend los muestra con el texto en español de esta tabla.
+La interfaz siempre está en español. La API responde mensajes en inglés y, para `BR-01`, la fecha límite en el campo `dueDate` (por ejemplo, `{"message": "The copy is not available", "dueDate": "2026-12-10"}`); el frontend arma el texto en español de esta tabla con esa fecha. Los valores de la paleta están en `frontend/src/theme.ts`.
 
 | Situación | Evitar | Usar |
 | --- | --- | --- |
@@ -207,7 +232,7 @@ La interfaz siempre está en español. La API responde mensajes en inglés (por 
 | Entrada | `LendCopyCommand(copyCode, memberId, dueDate)`, desde `POST /api/loans` |
 | Precondiciones | El ejemplar existe (si no, `CopyNotFoundException` = 404) y el lector está identificado con su cédula o código. |
 | Flujo principal | 1. El/la bibliotecario/a escanea o escribe el código del ejemplar; la pantalla muestra su estado. 2. Ingresa el lector. 3. Revisa la fecha límite (por defecto, hoy + 15 días). 4. Pulsa **Prestar**. 5. `LendCopy` carga el `Copy` con `CopyRepository`, crea el `LoanPeriod(hoy, dueDate)`, llama a `copy.lend(memberId, period)`, guarda y publica `CopyLent`. 6. La pantalla confirma: "Préstamo registrado. Devolver hasta el 08/12/2026." |
-| Flujo alternativo (`BR-01`) | En el paso 5 el ejemplar ya está prestado: se lanza `CopyNotAvailableException` (HTTP 409); no se guarda nada ni se publica evento. La pantalla explica en español: "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." |
+| Flujo alternativo (`BR-01`) | En el paso 5 el ejemplar ya está prestado: se lanza `CopyNotAvailableException` (HTTP 409) con la fecha límite del préstamo activo; no se guarda nada ni se publica evento. La respuesta es `{"message": "The copy is not available", "dueDate": "2026-12-10"}` y la pantalla explica en español: "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." |
 | Postcondiciones | El ejemplar deja de estar **Disponible**; existe un `Loan` activo con su `LoanPeriod`; se publicó `CopyLent`. |
 
 ---
@@ -218,13 +243,15 @@ La interfaz siempre está en español. La API responde mensajes en inglés (por 
 
 | Contexto | Decisión | Consecuencias |
 | --- | --- | --- |
-| El personal de la UCE habla español, pero el código del equipo y sus convenciones (commits, identificadores) están en inglés. | Identificadores, paquetes, eventos y códigos de regla en inglés (`Copy`, `Member`, `Loan`, `CopyLent`, `BR-01`). Textos de pantalla, mensajes y documentación del negocio en español (Ejemplar, Lector, Prestar). La equivalencia está en el glosario de la página 5. | (+) El código sigue convenciones estándar y la interfaz habla el idioma del usuario. (−) El glosario debe mantenerse con ambos nombres; la API devuelve mensajes en inglés que el frontend debe mostrar en español. |
+| El personal de la UCE habla español, pero el código del equipo y sus convenciones (commits, identificadores) están en inglés. | Identificadores, paquetes, eventos y códigos de regla en inglés (`Copy`, `Member`, `Loan`, `CopyLent`, `BR-01`). Textos de pantalla, mensajes y documentación del negocio en español (Ejemplar, Lector, Prestar). La equivalencia está en el glosario de la página 5; la regla completa (qué idioma se usa en cada lugar y qué términos no se traducen) está en la sección **Regla de idioma** de esa página. | (+) El código sigue convenciones estándar y la interfaz habla el idioma del usuario. (−) El glosario debe mantenerse con ambos nombres; la API devuelve mensajes en inglés que el frontend debe mostrar en español. |
 
 ---
 
 ## 13 · Diseño de interfaz (Figma) (extracto)
 
-Archivo de Figma: **Biblioteca UCE** (`https://www.figma.com/design/bFFvd1YJgBEK26FKwuUXtR/Biblioteca--UCE`). Los textos de pantalla y los nombres de las capas están en español.
+Archivo de Figma: **Biblioteca UCE** (`https://www.figma.com/design/bFFvd1YJgBEK26FKwuUXtR/Biblioteca--UCE`). Los textos de pantalla y los nombres de las capas están en español. Plan B si el MCP de Figma no responde: `docs/figma/D02-prestar-ejemplar-no-disponible.png` y `docs/figma/D03-prestamo-confirmado.png`.
+
+**Pendiente en Figma (regla de idioma):** los frames "D02 … Ejemplar no disponible (RN-01)" y "D04 … Devuelto (RN-02)" y el hotspot "Probar RN-01" deben decir `BR-01` y `BR-02`. En D03, el texto "Evento de dominio publicado: EjemplarPrestado" debe usar el nombre del código: `CopyLent`.
 
 ### Trazabilidad Handoff DDD (Figma, Confluence, código)
 
@@ -234,7 +261,7 @@ Archivo de Figma: **Biblioteca UCE** (`https://www.figma.com/design/bFFvd1YJgBEK
 | Capa `lectorId` | Lector | `MemberId` | `memberId` |
 | Capa `fechaLimite` | Período de préstamo | `LoanPeriod.dueOn` | `dueDate` |
 | Botón Prestar (`btnPrestar`) | Prestar | `LendCopy` y `Copy.lend()` | `POST /api/loans` |
-| D02 – Ejemplar no disponible | `BR-01` (página 6) | `CopyNotAvailableException` | 409 "The copy is not available" (se muestra en español) |
+| D02 – Ejemplar no disponible | `BR-01` (página 6) | `CopyNotAvailableException` | 409 `{"message": "The copy is not available", "dueDate": "2026-12-10"}`; la pantalla lo muestra en español con la fecha |
 | D04 – Devuelto | `BR-02` (página 6) | `Copy.returnCopy()` | Pendiente |
 | D03 Préstamo confirmado | Eventos (página 10) | `CopyLent` | 201 Created |
 | `Organismo/Prestamos/*` | Contexto Préstamos (página 8) | Paquete `ec.edu.uce.library.lending` | — |

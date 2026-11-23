@@ -28,7 +28,7 @@ Nov 22, 2026 · Registro de lo que se hizo para preparar la clase demostrativa, 
 6. Confluence: crear el sitio y el espacio
 7. Conectar Claude Code con Confluence (MCP)
 8. Crear las páginas de DDD con Claude
-9. Figma (pendiente)
+9. Conectar Claude Code con Figma (MCP)
 10. Comprobar que el proyecto compila
 
 ---
@@ -185,20 +185,34 @@ El contenido está en `docs/confluence-demo-biblioteca.md`. En Claude, con el **
 
 ```text
 Lee docs/confluence-demo-biblioteca.md. En el espacio "Biblioteca UCE" (clave BIB)
-del sitio <tu-sitio>.atlassian.net, crea una página padre "Demo UCE Library"
+del sitio <tu-sitio>.atlassian.net, crea una página padre "Demo Biblioteca UCE"
 y, dentro, una página hija por cada sección "##" del archivo, con el mismo
 título y su contenido. Muéstrame el plan antes de crear nada.
 ```
 
-Revisa el plan, apruébalo y comprueba en Confluence que existen las páginas 5 a 10 y la de referencia de Figma.
+Revisa el plan, apruébalo y comprueba en Confluence que existen las páginas 5 a 10 y la 13 (Diseño de interfaz, Figma).
 
-> Las páginas ya existen y usan la terminología en inglés (Copy, Loan, Member, BR-01…). `docs/confluence-demo-biblioteca.md` es su copia; si cambias una, cambia la otra.
+> Las páginas ya existen. Siguen la regla de idioma de la ADR-007: el negocio y la documentación en español (ejemplar, lector, prestar) y los nombres del código en inglés (`Copy`, `Member`, `lend`, `BR-01`), según la página 5. `docs/confluence-demo-biblioteca.md` es su copia; si cambias una, cambia la otra.
 
-## 9. Figma (pendiente)
+## 9. Conectar Claude Code con Figma (MCP)
 
-- Cuenta con el plan Education (figma.com/education).
-- Wireframe de la pantalla **Lend copy**, con los campos que figuran al final de `docs/confluence-demo-biblioteca.md` (Copy code, Member ID, Due date, botón Lend y el mensaje de BR-01).
-- Conector MCP de Figma: por configurar y probar. Si no funciona, usa capturas de la pantalla (plan B).
+El archivo **Biblioteca UCE** de Figma ya tiene las pantallas (D01 a D09 de escritorio, M01 a M05 móviles) y el prototipo. Lo que se usa en clase es **D02 "Prestar ejemplar"** y **D03 "Préstamo confirmado"**.
+
+1. Cuenta con el plan Education (figma.com/education) o, al menos, acceso de lectura al archivo.
+2. En la terminal de IntelliJ, agrega el servidor MCP remoto de Figma:
+
+   ```powershell
+   claude mcp add --transport http figma https://mcp.figma.com/mcp
+   ```
+
+3. En `claude`: `/mcp` → **figma** → **Authenticate**, e inicia sesión en Chrome con la cuenta que ve el archivo.
+4. Prueba **una sola vez** (el plan gratuito de Figma permite muy pocas llamadas al mes):
+
+   ```text
+   En el archivo de Figma "Biblioteca UCE", lista las pantallas de la página 08 Desktop.
+   ```
+
+**Plan B:** si el MCP de Figma no responde o se acabaron las llamadas, Claude lee las imágenes de `docs/figma/` (`D02-prestar-ejemplar-no-disponible.png` y `D03-prestamo-confirmado.png`) junto con la sección 13 de `docs/confluence-demo-biblioteca.md`, que tiene la trazabilidad de Figma al código. Para un plan B no hace falta exportar JSON ni usar plugins: PNG y esa tabla bastan.
 
 ## 10. Comprobar que el proyecto compila
 
@@ -224,7 +238,7 @@ Hazlo **en vivo solo si el conector ya funcionó el día anterior**. Si no, mues
 1. Terminal de IntelliJ (Alt+F12): `claude mcp list` → "Así sabe Claude a qué fuentes externas puede acceder".
 2. Explica el comando que lo agregó: `claude mcp add --transport http atlassian <url>`. Una línea basta para conectar una fuente de contexto.
 3. `claude` → `/mcp` → muestra **atlassian** conectado y su lista de herramientas.
-4. Prueba en vivo: "lista las páginas hijas de Demo UCE Library".
+4. Prueba en vivo: "lista las páginas hijas de Demo Biblioteca UCE".
 5. Mensaje: "Claude no adivina el lenguaje ubicuo: lo lee de nuestra documentación".
 
 **Para repetir la conexión completa frente al grupo:** `claude mcp remove atlassian`, luego los pasos 7.1 a 7.3. El inicio de sesión en Chrome será rápido si ya tienes la sesión de Atlassian abierta.

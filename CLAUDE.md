@@ -27,7 +27,8 @@ ec.edu.uce.library
 ## Conventions
 
 - **Language (ADR-007).** Code, identifiers and technical terms are in English; the business, the user interface and
-  the documentation are in Spanish.
+  the documentation are in Spanish. The full rule (which language goes where, and which terms are never translated,
+  such as `BR-xx`, Core, Context Map, API or endpoint) is in page 5, section "Regla de idioma".
 - **Names come from the ubiquitous language in Confluence.** Before naming a class, method or field, read the pages
   "5 · Lenguaje ubicuo", "6 · Reglas e invariantes", "8 · Contextos y mapa", "9 · Modelo táctico" and
   "10 · Eventos de dominio" of the BIB space (use the Atlassian MCP). Page 5 has a bilingual glossary: take names
@@ -43,6 +44,8 @@ ec.edu.uce.library
 - **Business rules live in the aggregate**, not in controllers, services or the UI. The use case loads the aggregate,
   calls its method, saves it and publishes the events.
 - **Every rule has its test.** Each `BR-xx` rule gets a unit test in `domain` (JUnit 5, no Spring) whose name mentions the rule code.
+- **Architecture is tested.** `ArchitectureTest` (ArchUnit) fails the build if `domain` imports a framework, if a
+  dependency points outward or if a context uses another context's classes. Do not weaken it to make code compile.
 - Code, identifiers and commit messages in English (conventional commits).
 
 ## Commands

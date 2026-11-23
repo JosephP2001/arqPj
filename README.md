@@ -151,16 +151,17 @@ npm run lint
 
 ### Probar la API (rama `demo/respaldo`)
 
-Al arrancar, el backend carga ejemplares de prueba: `UCE-0001`, `UCE-0002` y `UCE-0003` están disponibles y `UCE-0004` ya está prestado.
+Al arrancar, el backend carga los mismos ejemplares que Figma: `EJ-00123` y `EJ-00124` están disponibles y `EJ-00456` está prestado al lector `1700000004` hasta el 10/12/2026 (si esa fecha ya pasó, hasta hoy + 15 días).
 
 ```bash
 # Préstamo correcto → 201 Created
 curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" \
-  -d '{"copyCode":"UCE-0001","memberId":"1712345678","dueDate":"2026-12-08"}'
+  -d '{"copyCode":"EJ-00123","memberId":"1712345678","dueDate":"2026-12-08"}'
 
-# Viola BR-01 → 409 Conflict
+# Viola BR-01 → 409 Conflict con la fecha límite del préstamo activo
 curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" \
-  -d '{"copyCode":"UCE-0004","memberId":"1712345678","dueDate":"2026-12-08"}'
+  -d '{"copyCode":"EJ-00456","memberId":"1712345678","dueDate":"2026-12-08"}'
+# {"message":"The copy is not available","dueDate":"2026-12-10"}
 ```
 
 ---
@@ -208,10 +209,11 @@ El acceso a Confluence y a Figma está restringido al equipo.
 - [x] Agregado `Copy` con `BR-01` y `BR-02`, y sus pruebas
 - [x] Caso de uso `LendCopy` y endpoint `POST /api/loans` (409 al violar `BR-01`)
 - [ ] Caso de uso `ReturnCopy` y su endpoint (`BR-02` hoy solo existe en el dominio)
-- [ ] Interfaz en español, como en Figma (hoy la pantalla está en inglés)
-- [ ] Material UI y `frontend/src/theme.ts` con los tokens de Figma
-- [ ] Bloqueo optimista (`@Version`) y `@Transactional` para proteger `BR-01` ante concurrencia
-- [ ] Unificar los códigos de ejemplo (`UCE-000x` en el backend, `EJ-xxxxx` en Figma)
+- [x] Interfaz en español, como en Figma (pantalla Prestar ejemplar con Material UI y `frontend/src/theme.ts`)
+- [x] Bloqueo optimista (`@Version`) y transacción para proteger `BR-01` ante concurrencia
+- [x] Códigos de ejemplo iguales a Figma (`EJ-00123`, `EJ-00124`, `EJ-00456`)
+- [x] Prueba de arquitectura (ArchUnit) para los límites del monolito
+- [ ] Listener de `CopyReturned` en Catalog (depende de `ReturnCopy`)
 - [ ] `BR-03` (tarea de la clase)
 
 ---
