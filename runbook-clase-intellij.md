@@ -13,7 +13,7 @@ Nov 23, 2026 · @JoeyOut · versión 3 (alineada con el repo y con el Confluence
 | Duración | 60 minutos |
 | Dominio del ejercicio | Préstamo de libros en la biblioteca universitaria |
 | Paquete raíz | `ec.edu.uce.library` |
-| Idioma del dominio | Inglés, igual que el Confluence: Copy, Loan, Member, BR-01… |
+| Idioma | Código en inglés; interfaz y negocio en español (ADR-007) |
 | Repositorio de la demo | `JosephP2001/arqPj`; la clase arranca en la rama `develop` |
 
 **Por qué este dominio:** el grupo ya vio DDD y Confluence, así que el ejemplo tiene que poder recorrer las páginas 5 a 10 de la guía sin forzarlas. La biblioteca da tres contextos claros (Lending, Catalog, Members), un core evidente (Lending), un agregado con invariantes fuertes (`Copy`), eventos naturales (`CopyLent`, `CopyReturned`) y una regla que cruza agregados para la tarea (BR-03). Además, todos los estudiantes de la UCE lo conocen, así que no hay que explicar el negocio.
@@ -21,7 +21,6 @@ Nov 23, 2026 · @JoeyOut · versión 3 (alineada con el repo y con el Confluence
 ## Decisiones aún pendientes
 
 - [ ] **Tarea práctica:** se define después de la rúbrica (propuesta al final).
-- [ ] **Figma:** hoy la referencia es la página "Figma · Pantalla Lend copy" del Confluence. Falta el wireframe real y el conector MCP de Figma.
 - [ ] **Accesos MCP:** confirmar el acceso a Atlassian desde la computadora de la clase.
 
 ## Objetivo
@@ -83,7 +82,8 @@ Prueba todo en la misma computadora y en la misma red que usarás en clase.
 - [ ] Ensayo del plan B: `git switch demo/respaldo`, arrancar backend y frontend, prestar `UCE-0001` desde la pantalla y provocar el error con `UCE-0004`. Volver a `develop`.
 - [ ] Claude Code instalado y con la sesión iniciada; `claude` responde en la terminal integrada de IntelliJ.
 - [ ] Plugin de Claude Code para JetBrains (opcional; si falla, basta la terminal integrada).
-- [ ] Páginas 5 a 10 y "Figma · Pantalla Lend copy" en el espacio BIB del Confluence.
+- [ ] Páginas 5 a 10 y "13 · Diseño de interfaz (Figma)" en el espacio BIB del Confluence.
+- [ ] Archivo "Biblioteca UCE" de Figma accesible (pantallas D02 "Prestar ejemplar" y D03 "Préstamo confirmado") y PNG de D02 y D03 exportados en `docs/figma/` como plan B.
 - [ ] Conector MCP de Atlassian configurado y probado con una consulta real.
 - [ ] Puertos 8080 y 5173 libres.
 - [ ] Capturas del antes y después del bloque 5, por si falla internet.
@@ -97,7 +97,7 @@ Prueba todo en la misma computadora y en la misma red que usarás en clase.
 | 12–18 | 2. Estructura monolítica | Árbol de paquetes ya creado | Todos ubican dónde irá cada clase |
 | 18–27 | 3. DDD | Del Confluence al diseño (sin escribir código) | Agregado `Copy` decidido |
 | 27–42 | 4. Claude Code | Prompt, plan, diff, prueba | Agregado y prueba generados y revisados |
-| 42–54 | 5. Confluence como contexto | El mismo pedido con contexto vía MCP | Comparación antes y después |
+| 42–54 | 5. Confluence y Figma como contexto | El mismo pedido con contexto vía MCP | Comparación antes y después |
 | 54–60 | Cierre | Criterios de éxito, mensajes y tarea | Tarea entregada |
 
 En el bloque 3 no se escribe código a mano. Se diseña en voz alta y el código lo genera Claude en el bloque 4. Así el agregado se construye una sola vez.
@@ -204,7 +204,7 @@ No consultes el Confluence. Muéstrame el plan antes de editar archivos.
 
 **Cierre del bloque:** sin el Confluence, Claude suele inventar nombres razonables pero que no son los del negocio: `Book` para la copia física, `User` en vez de Member, `borrow` en vez de `lend`, una excepción genérica en vez de `CopyNotAvailableException`, y sin eventos. El bloque 5 los corrige.
 
-## Bloque 5 — Confluence como contexto (42–54 min)
+## Bloque 5 — Confluence y Figma como contexto (42–54 min)
 
 Mismo pedido, ahora con Claude leyendo las fuentes reales. La diferencia entre las dos salidas es la demostración.
 
@@ -223,12 +223,13 @@ Mismo pedido, ahora con Claude leyendo las fuentes reales. La diferencia entre l
 | Confluence | 8 · Contextos y mapa | Paquete de cada clase; uso de `BookId` y `MemberId` en vez de las entidades |
 | Confluence | 9 · Modelo táctico | `CopyId`, `Loan`, `LoanPeriod`, `CopyNotAvailableException`, `LendCopy`, `CopyRepository` |
 | Confluence | 10 · Eventos de dominio | `CopyLent`, `CopyReturned` |
-| Confluence | Figma · Pantalla "Lend copy" | Campos del formulario → entrada de `LendCopy` |
+| Confluence | 13 · Diseño de interfaz (Figma) | Trazabilidad de las capas de Figma (español) a los nombres del código (inglés) |
+| Figma | Pantalla D02 "Prestar ejemplar" (archivo "Biblioteca UCE") | Campos `codigoEjemplar`, `lectorId`, `fechaLimite` → `copyCode`, `memberId`, `dueDate` (entrada de `LendCopy`). Plan B: PNG de D02 y D03 en `docs/figma/` si el MCP de Figma no responde (el plan gratuito de Figma limita mucho las llamadas) |
 
 **Prompt enriquecido**
 
 ```text
-Lee en el Confluence (espacio BIB) las páginas 5 a 10 y "Figma · Pantalla Lend copy".
+Lee en el Confluence (espacio BIB) las páginas 5 a 10 y 13, y en Figma la pantalla D02 "Prestar ejemplar".
 Con eso, rehaz el agregado y el caso de uso del contexto lending
 usando exactamente los términos del glosario, cubriendo BR-01 y BR-02 con pruebas
 y emitiendo los eventos de dominio. No implementes BR-03. Muéstrame el plan antes de editar.
@@ -238,7 +239,7 @@ y emitiendo los eventos de dominio. No implementes BR-03. Muéstrame el plan ant
 
 **Si se acaba el tiempo:** no ejecutes el prompt en vivo. Muestra el diff contra la solución: `git diff develop etapa-2-dominio -- backend` (o cambia a `demo/respaldo`).
 
-**Si el MCP no conecta:** pide a Claude que lea `docs/confluence-demo-biblioteca.md`, que es la copia en Markdown de esas páginas.
+**Si el MCP no conecta:** pide a Claude que lea `docs/confluence-demo-biblioteca.md`, que es la copia en Markdown de esas páginas. Si el que falla es el MCP de Figma, pásale los PNG de D02 y D03 de `docs/figma/`.
 
 **Cierre opcional (si sobra tiempo):** en `demo/respaldo`, arranca backend y frontend, presta `UCE-0001` desde la pantalla Lend copy y luego intenta `UCE-0004`: aparece "The copy is not available". La regla del agregado llega intacta hasta la interfaz.
 
