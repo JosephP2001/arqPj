@@ -2,6 +2,7 @@ package ec.edu.uce.library.lending.infrastructure.web;
 
 import ec.edu.uce.library.lending.application.CopyNotFoundException;
 import ec.edu.uce.library.lending.domain.CopyNotAvailableException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -15,6 +16,15 @@ class LendingExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     ErrorResponse copyNotAvailable(CopyNotAvailableException e) {
         return new ErrorResponse(e.getMessage(), e.dueOn());
+    }
+
+    /**
+     * Another librarian lent the same Copy at the same time (BR-01 under concurrency): the Copy is no longer available.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    ErrorResponse concurrentLend(OptimisticLockingFailureException e) {
+        return ErrorResponse.of("The copy is not available");
     }
 
     @ExceptionHandler(CopyNotFoundException.class)

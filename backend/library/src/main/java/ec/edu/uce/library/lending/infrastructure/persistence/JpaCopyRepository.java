@@ -26,9 +26,17 @@ class JpaCopyRepository implements CopyRepository {
         return jpa.findById(id.code()).map(JpaCopyRepository::toDomain);
     }
 
+    /**
+     * Updates the stored entity instead of replacing it, so its {@code @Version} is checked on commit.
+     */
     @Override
     public void save(Copy copy) {
-        jpa.save(toEntity(copy));
+        CopyJpaEntity entity = jpa.findById(copy.id().code())
+                .orElseGet(() -> new CopyJpaEntity(copy.id().code()));
+        copy.loan().ifPresentOrElse(
+                loan -> entity.updateLoan(loan.memberId().value(), loan.period().lentOn(), loan.period().dueOn()),
+                () -> entity.updateLoan(null, null, null));
+        jpa.save(entity);
     }
 
     private static Copy toDomain(CopyJpaEntity entity) {
@@ -37,12 +45,5 @@ class JpaCopyRepository implements CopyRepository {
         }
         return Copy.rehydrate(new CopyId(entity.getCode()), new MemberId(entity.getMemberId()),
                 new LoanPeriod(entity.getLentOn(), entity.getDueOn()));
-    }
-
-    private static CopyJpaEntity toEntity(Copy copy) {
-        return copy.loan()
-                .map(loan -> new CopyJpaEntity(copy.id().code(), loan.memberId().value(),
-                        loan.period().lentOn(), loan.period().dueOn()))
-                .orElseGet(() -> new CopyJpaEntity(copy.id().code(), null, null, null));
     }
 }

@@ -26,14 +26,26 @@ ec.edu.uce.library
 
 ## Conventions
 
+- **Language (ADR-007).** Code, identifiers and technical terms are in English; the business, the user interface and
+  the documentation are in Spanish. The full rule (which language goes where, and which terms are never translated,
+  such as `BR-xx`, Core, Context Map, API or endpoint) is in page 5, section "Regla de idioma".
 - **Names come from the ubiquitous language in Confluence.** Before naming a class, method or field, read the pages
   "5 · Lenguaje ubicuo", "6 · Reglas e invariantes", "8 · Contextos y mapa", "9 · Modelo táctico" and
-  "10 · Eventos de dominio" of the BIB space (use the Atlassian MCP). Use those exact terms. Do not invent synonyms;
-  if a term is missing, ask instead of making one up.
+  "10 · Eventos de dominio" of the BIB space (use the Atlassian MCP). Page 5 has a bilingual glossary: take names
+  only from its **"Nombre en el código"** column (English: `Copy`, `Member`, `Loan`, `LoanPeriod`, `lend`,
+  `returnCopy`), never from the Spanish "Término del negocio" column (`Ejemplar`, `Lector`, `Prestamo` are not valid
+  identifiers). Use those exact terms. Do not invent synonyms; if a term is missing, ask instead of making one up.
   If the Atlassian MCP is not available, read `docs/confluence-demo-biblioteca.md` (a Markdown copy of those pages).
+- **User-facing text is in Spanish.** Labels, messages and titles use the exact wording of Figma (file
+  "Biblioteca UCE") and of page "4 · Línea gráfica" (section "Voz y tono"). The API keeps its messages in English;
+  the frontend shows the Spanish text.
+- **Business rules are coded `BR-xx`** (`BR-01`, `BR-02`, `BR-03`), the same code in Confluence, test names and code.
+  Never use `RN-xx`.
 - **Business rules live in the aggregate**, not in controllers, services or the UI. The use case loads the aggregate,
   calls its method, saves it and publishes the events.
 - **Every rule has its test.** Each `BR-xx` rule gets a unit test in `domain` (JUnit 5, no Spring) whose name mentions the rule code.
+- **Architecture is tested.** `ArchitectureTest` (ArchUnit) fails the build if `domain` imports a framework, if a
+  dependency points outward or if a context uses another context's classes. Do not weaken it to make code compile.
 - Code, identifiers and commit messages in English (conventional commits).
 
 ## Commands

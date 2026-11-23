@@ -104,6 +104,7 @@ export function LendCopyForm() {
 
           <TextField
             label="Lector (cédula o código)"
+            helperText="Cédula o código del lector"
             value={memberId}
             onChange={(e) => setMemberId(e.target.value)}
             placeholder="1712345678"
@@ -113,6 +114,7 @@ export function LendCopyForm() {
 
           <TextField
             label="Fecha límite de devolución"
+            helperText="Por defecto: hoy + 15 días"
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
