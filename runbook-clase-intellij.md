@@ -34,7 +34,7 @@ Al terminar la clase, los estudiantes habrán visto en vivo cómo se arranca un 
 | Rama / tag | Contenido | Uso en clase |
 | --- | --- | --- |
 | `develop` = tag `etapa-1-estructura` | Paquetes de los tres contextos con sus capas vacías, H2, proxy `/api` de Vite y `CLAUDE.md` | **Punto de partida**: aquí se programa en vivo |
-| `demo/respaldo` | Solución completa, construida por etapas | Plan B si algo falla o se acaba el tiempo |
+| `demo/respaldo` | Solución completa: Prestar y Devolver (BR-01 y BR-02) de punta a punta, Catalog escuchando `CopyReturned` y `ArchitectureTest` | Plan B si algo falla o se acaba el tiempo |
 | tag `etapa-2-dominio` | `Copy`, `CopyId`, `MemberId`, `Loan`, `LoanPeriod`, `CopyNotAvailableException`, `CopyRepository`, `CopyLent`, `CopyReturned`, caso de uso `LendCopy`; pruebas de BR-01 y BR-02 sin Spring | Saltar al final del bloque 4 / 5 |
 | tag `etapa-3-api` | Adaptador JPA, `POST /api/loans` (409 "The copy is not available" al violar BR-01) y copias de ejemplo | Mostrar la regla viajando hasta la API |
 | tag `etapa-4-react` | Pantalla **Prestar ejemplar** (MUI, en español) llamando al endpoint | Mostrar el formulario del Figma funcionando |
@@ -244,7 +244,7 @@ y emitiendo los eventos de dominio. No implementes BR-03. Muéstrame el plan ant
 
 **Si el MCP no conecta:** pide a Claude que lea `docs/confluence-demo-biblioteca.md`, que es la copia en Markdown de esas páginas. Si el que falla es el MCP de Figma, pásale los PNG de D02 y D03 de `docs/figma/`.
 
-**Cierre opcional (si sobra tiempo):** en `demo/respaldo`, arranca backend y frontend, presta `EJ-00123` desde la pantalla Prestar ejemplar y luego intenta `EJ-00456`: aparece "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." (la API responde en inglés con `dueDate` y la pantalla lo muestra en español). La regla del agregado llega intacta hasta la interfaz.
+**Cierre opcional (si sobra tiempo):** en `demo/respaldo`, arranca backend y frontend, presta `EJ-00123` desde la pantalla Prestar ejemplar y luego intenta `EJ-00456`: aparece "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." (la API responde en inglés con `dueDate` y la pantalla lo muestra en español). La regla del agregado llega intacta hasta la interfaz. Luego, en la pestaña **Devolver**, devuelve `EJ-00456`: "Ejemplar devuelto. Ya está disponible." (BR-02), y abre `http://localhost:8080/api/copy-usages/EJ-00456`: `timesReturned` es 1 porque Catálogo escuchó el evento `CopyReturned` sin que Préstamos lo conozca.
 
 ## Plan B y problemas frecuentes
 

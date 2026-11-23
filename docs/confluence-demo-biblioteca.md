@@ -22,9 +22,11 @@ Copia en Markdown de las páginas de la demo en el espacio **Biblioteca UCE** (c
 | Préstamo | Entrega de un ejemplar a un lector por un período | `Loan` (entidad interna del agregado `Copy`) |
 | Período de préstamo | Fecha de entrega y fecha límite de devolución | Objeto de valor `LoanPeriod(lentOn, dueOn)` |
 | **Prestar** | Entregar un ejemplar disponible a un lector | `Copy.lend(memberId, period)`; caso de uso `LendCopy` |
-| **Devolver** | Recibir un ejemplar prestado | `Copy.returnCopy(returnedOn)`; caso de uso `ReturnCopy` (pendiente) |
+| **Devolver** | Recibir un ejemplar prestado | `Copy.returnCopy(returnedOn)`; caso de uso `ReturnCopy` |
 | **Disponible** | Estado de un ejemplar que puede prestarse | `Copy.isAvailable()` |
 | Ejemplar no disponible | Error al intentar prestar un ejemplar ya prestado | `CopyNotAvailableException` |
+| Ejemplar no prestado | Error al intentar devolver un ejemplar que no tiene un préstamo activo | `CopyNotLentException` |
+| Uso del ejemplar | Cuántas veces se devolvió un ejemplar; lo lleva Catálogo para sus estadísticas de uso a partir del evento `CopyReturned` | `CopyUsage` (Catalog) con `recordReturn()` y `timesReturned()`; caso de uso `RecordCopyReturn` |
 | Regla de negocio | Invariante que el dominio siempre debe cumplir | Código `BR-xx` (Business Rule), igual en Confluence, pruebas y código |
 
 ### Contextos delimitados
@@ -39,12 +41,12 @@ Copia en Markdown de las páginas de la demo en el espacio **Biblioteca UCE** (c
 
 | Tipo | Nombres |
 | --- | --- |
-| Agregado y entidad | `Copy`, `Loan` |
-| Objetos de valor | `CopyId`, `MemberId`, `BookId` (propuesto), `LoanPeriod` |
-| Excepción de dominio | `CopyNotAvailableException` |
-| Casos de uso | `LendCopy` (implementado); `ReturnCopy`, `ListActiveLoans`, `ListMemberLoans` (propuestos) |
+| Agregado y entidad | `Copy`, `Loan` (Lending); `CopyUsage` (Catalog) |
+| Objetos de valor | `CopyId`, `MemberId`, `BookId` (propuesto), `LoanPeriod`. Catalog tiene su propio `CopyId`: guarda solo el identificador, no la clase de Lending. |
+| Excepción de dominio | `CopyNotAvailableException`, `CopyNotLentException` |
+| Casos de uso | `LendCopy`, `ReturnCopy` (Lending); `RecordCopyReturn` (Catalog); `ListActiveLoans`, `ListMemberLoans` (propuestos) |
 | Eventos | `CopyLent`, `CopyReturned` |
-| Puertos | `CopyRepository`, `DomainEventPublisher` |
+| Puertos | `CopyRepository`, `DomainEventPublisher` (Lending); `CopyUsageRepository` (Catalog) |
 
 ### Términos que no se usan
 
@@ -91,7 +93,7 @@ Las reglas se redactan en español y con palabras del negocio; el código `BR-xx
 | Código | Regla | Quién la protege | Prueba en el código | Mensaje en pantalla |
 | --- | --- | --- | --- | --- |
 | `BR-01` | Un ejemplar prestado no puede volver a prestarse hasta que se devuelva | Agregado `Copy` (método `lend`) | `br01_lendingALentCopyThrowsCopyNotAvailableException` (lanza `CopyNotAvailableException`) | "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." |
-| `BR-02` | La devolución de un ejemplar lo deja **Disponible** | Agregado `Copy` (método `returnCopy`) | `br02_returningACopyLeavesItAvailable` (después de `returnCopy`, `isAvailable()` es verdadero) | "Ejemplar devuelto. Ya está disponible." |
+| `BR-02` | La devolución de un ejemplar lo deja **Disponible** | Agregado `Copy` (método `returnCopy`) | `br02_returningACopyLeavesItAvailable` (después de `returnCopy`, `isAvailable()` es verdadero); en el caso de uso, `br02_returnsTheCopySavesItAvailableAndPublishesCopyReturned` | "Ejemplar devuelto. Ya está disponible." |
 | `BR-03` | Un lector no puede tener más de tres préstamos activos | Por definir (tarea de la clase) | Sugerida: `br03_lendingAFourthCopyToAMemberFails` | Por definir |
 
 ### Invariante del objeto de valor
@@ -128,7 +130,7 @@ Las reglas se redactan en español y con palabras del negocio; el código `BR-xx
 | Catálogo (Catalog) | `ec.edu.uce.library.catalog` | `BookId` y datos de la obra | — |
 | Lectores (Members) | `ec.edu.uce.library.members` | `MemberId` y estado del lector | Datos del Sistema Académico UCE (vía ACL) |
 
-**Relaciones:** Lending es cliente de Catalog y de Members, pero solo guarda sus identificadores. Ningún contexto comparte clases de entidad con otro.
+**Relaciones:** Lending es cliente de Catalog y de Members, pero solo guarda sus identificadores. Ningún contexto comparte clases de entidad con otro. Entre contextos solo viaja el lenguaje publicado de Lending: sus eventos y los identificadores que llevan (ADR-008). `ArchitectureTest` lo comprueba en cada build.
 
 **Capas dentro de cada contexto:** `domain` (sin Spring), `application` (casos de uso) e `infrastructure` (REST, JPA). Las dependencias apuntan hacia adentro.
 
@@ -149,7 +151,7 @@ Las reglas se redactan en español y con palabras del negocio; el código `BR-xx
 | Sistema Académico UCE | Members | ACL | Datos del lector traducidos |
 | Members | Lending | Cliente / proveedor | `MemberId` |
 | Catalog | Lending | Cliente / proveedor y Conformista | `BookId` |
-| Lending | Catalog | Eventos de dominio | `CopyReturned` (estadísticas de uso) |
+| Lending | Catalog | Eventos de dominio | `CopyReturned` (estadísticas de uso: `CopyUsage`) |
 | Lending | Notificaciones | Eventos de dominio | `CopyLent` (recordatorio de devolución) |
 
 ---
@@ -166,10 +168,12 @@ Paquete: `ec.edu.uce.library.lending.domain` (Java puro, sin Spring). Implementa
 | `Loan` | Préstamo | Entidad interna | `MemberId` y `LoanPeriod` del préstamo activo |
 | `LoanPeriod` | Período de préstamo | Objeto de valor (`record`) | `lentOn` y `dueOn`; `dueOn` debe ser posterior a `lentOn` |
 | `CopyNotAvailableException` | Ejemplar no disponible | Excepción de dominio | Se lanza al violar `BR-01`; lleva la fecha límite (`dueOn`) del préstamo activo para que la pantalla diga hasta cuándo está prestado |
+| `CopyNotLentException` | Ejemplar no prestado | Excepción de dominio | La lanza `returnCopy` si el ejemplar no tiene un préstamo activo |
 | `CopyLent`, `CopyReturned` | Ejemplar prestado / devuelto | Eventos de dominio | Los devuelven `lend` y `returnCopy` (página 10) |
 | `CopyRepository` | — | Puerto (interfaz en `domain`) | `findById(CopyId)` y `save(Copy)`; implementado con JPA en `infrastructure` |
 | `DomainEventPublisher` | — | Puerto (interfaz en `application`) | `publish(event)`; lo usa el caso de uso después de guardar. Implementado en `infrastructure` con el `ApplicationEventPublisher` de Spring |
 | `LendCopy` | Prestar ejemplar | Caso de uso (`application`) | Carga el `Copy`, llama a `lend`, guarda y publica `CopyLent` |
+| `ReturnCopy` | Devolver ejemplar | Caso de uso (`application`) | Carga el `Copy`, llama a `returnCopy`, guarda y publica `CopyReturned` |
 | `BookId` | Obra (identificador) | Objeto de valor | **Propuesto:** todavía no está en `Copy` |
 
 ### Agregado `Copy`
@@ -194,13 +198,14 @@ Métodos de `Copy`: `lend(MemberId, LoanPeriod)` devuelve `CopyLent`; `returnCop
 
 Los eventos se nombran en pasado. El agregado los **devuelve** (`lend` y `returnCopy`) y el caso de uso los **publica** con el puerto `DomainEventPublisher` después de guardar. Si se viola `BR-01` no se guarda nada ni se publica ningún evento.
 
-**Estado en el código:** `CopyLent` se publica desde `LendCopy` (en Spring, con `ApplicationEventPublisher`). `CopyReturned` existe, pero falta el caso de uso `ReturnCopy` que lo publique. Todavía ningún listener consume los eventos.
+**Estado en el código:** `CopyLent` se publica desde `LendCopy` y `CopyReturned` desde `ReturnCopy` (en Spring, con `ApplicationEventPublisher`). Catalog escucha `CopyReturned` (`CopyReturnedListener`) y llama a su caso de uso `RecordCopyReturn`, que suma una devolución al `CopyUsage` del ejemplar; se consulta en `GET /api/copy-usages/{copyCode}`. `CopyLent` todavía no tiene consumidor (Notificaciones es futuro).
 
 | Origen | Resultado | Evento | Consumidor |
 | --- | --- | --- | --- |
 | `LendCopy` | Correcto | `CopyLent` | Notificaciones |
 | `LendCopy` | Viola `BR-01` | Ninguno (`CopyNotAvailableException`) | — |
-| `ReturnCopy` (pendiente) | Correcto (`BR-02`) | `CopyReturned` | Catalog |
+| `ReturnCopy` | Correcto (`BR-02`) | `CopyReturned` | Catalog (`RecordCopyReturn` → `CopyUsage`) |
+| `ReturnCopy` | El ejemplar no estaba prestado | Ninguno (`CopyNotLentException`) | — |
 
 ---
 
@@ -221,7 +226,7 @@ La interfaz siempre está en español. La API responde mensajes en inglés y, pa
 | Caso de uso (código) | En pantalla | Actor | Regla | Evento | Pantallas | Implementado |
 | --- | --- | --- | --- | --- | --- | --- |
 | `LendCopy` | Prestar ejemplar | Bibliotecario/a | `BR-01` | `CopyLent` | D02, D03 | Sí, `POST /api/loans` |
-| `ReturnCopy` | Devolver ejemplar | Bibliotecario/a | `BR-02` | `CopyReturned` | D04, D06 | Pendiente (la regla ya está en `Copy.returnCopy`) |
+| `ReturnCopy` | Devolver ejemplar | Bibliotecario/a | `BR-02` | `CopyReturned` | D04, D06 | Sí, `POST /api/loans/{copyCode}/return` |
 | `ListActiveLoans` | Préstamos activos | Bibliotecario/a | — | — | D01, D05, D06, D08 | Fuera de alcance (nombre propuesto) |
 | `ListMemberLoans` | Mis préstamos | Lector | `BR-03` (tarea) | — | M01, M02, M05 | Fuera de alcance (nombre propuesto) |
 
@@ -235,9 +240,19 @@ La interfaz siempre está en español. La API responde mensajes en inglés y, pa
 | Flujo alternativo (`BR-01`) | En el paso 5 el ejemplar ya está prestado: se lanza `CopyNotAvailableException` (HTTP 409) con la fecha límite del préstamo activo; no se guarda nada ni se publica evento. La respuesta es `{"message": "The copy is not available", "dueDate": "2026-12-10"}` y la pantalla explica en español: "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." |
 | Postcondiciones | El ejemplar deja de estar **Disponible**; existe un `Loan` activo con su `LoanPeriod`; se publicó `CopyLent`. |
 
+### ReturnCopy (Devolver ejemplar)
+
+| Elemento | Detalle |
+| --- | --- |
+| Entrada | `ReturnCopyCommand(copyCode)`, desde `POST /api/loans/{copyCode}/return` |
+| Precondiciones | El ejemplar existe (si no, `CopyNotFoundException` = 404). |
+| Flujo principal | 1. Escanea o escribe el código del ejemplar que el lector devuelve. 2. Pulsa **Devolver**. 3. `ReturnCopy` carga el `Copy`, llama a `copy.returnCopy(hoy)`, guarda y publica `CopyReturned`. 4. La pantalla confirma: "Ejemplar devuelto. Ya está disponible." 5. Catalog recibe `CopyReturned` y suma una devolución al `CopyUsage` del ejemplar. |
+| Flujo alternativo | El ejemplar no estaba prestado: `returnCopy` lanza `CopyNotLentException` (HTTP 409, "The copy is not lent"); no se guarda nada ni se publica evento. La pantalla muestra "Ejemplar no prestado: Este ejemplar no tiene un préstamo activo." |
+| Postcondiciones | `isAvailable()` es verdadero (`BR-02`); el `Loan` deja de estar activo; se publicó `CopyReturned`. |
+
 ---
 
-## 12 · Arquitectura y decisiones (ADR) (extracto: ADR-007)
+## 12 · Arquitectura y decisiones (ADR) (extracto: ADR-007 y ADR-008)
 
 ### ADR-007 · Código en inglés, negocio e interfaz en español
 
@@ -245,13 +260,19 @@ La interfaz siempre está en español. La API responde mensajes en inglés y, pa
 | --- | --- | --- |
 | El personal de la UCE habla español, pero el código del equipo y sus convenciones (commits, identificadores) están en inglés. | Identificadores, paquetes, eventos y códigos de regla en inglés (`Copy`, `Member`, `Loan`, `CopyLent`, `BR-01`). Textos de pantalla, mensajes y documentación del negocio en español (Ejemplar, Lector, Prestar). La equivalencia está en el glosario de la página 5; la regla completa (qué idioma se usa en cada lugar y qué términos no se traducen) está en la sección **Regla de idioma** de esa página. | (+) El código sigue convenciones estándar y la interfaz habla el idioma del usuario. (−) El glosario debe mantenerse con ambos nombres; la API devuelve mensajes en inglés que el frontend debe mostrar en español. |
 
+### ADR-008 · Entre contextos solo viajan los eventos de dominio y sus identificadores
+
+| Contexto | Decisión | Consecuencias |
+| --- | --- | --- |
+| Catalog necesita saber cuándo se devuelve un ejemplar (estadísticas de uso, página 8), pero ningún contexto debe usar las clases de otro (ADR-001). | El lenguaje publicado de Lending son sus eventos (`CopyLent`, `CopyReturned`) y los identificadores que llevan (`CopyId`, `MemberId`). Solo un adaptador de `infrastructure` de otro contexto puede usarlos (`CopyReturnedListener` en Catalog), y traduce el identificador a su propio modelo (`CopyId` de Catalog, `CopyUsage`). | (+) Los contextos se comunican sin conocerse: Lending no sabe que Catalog escucha. (+) `ArchitectureTest` permite solo esta excepción; usar `Copy` o `Loan` desde otro contexto, o un evento desde un `domain` ajeno, rompe el build. (−) Cambiar un evento afecta a quien lo escucha. |
+
 ---
 
 ## 13 · Diseño de interfaz (Figma) (extracto)
 
 Archivo de Figma: **Biblioteca UCE** (`https://www.figma.com/design/bFFvd1YJgBEK26FKwuUXtR/Biblioteca--UCE`). Los textos de pantalla y los nombres de las capas están en español. Plan B si el MCP de Figma no responde: `docs/figma/D02-prestar-ejemplar-no-disponible.png` y `docs/figma/D03-prestamo-confirmado.png`.
 
-**Pendiente en Figma (regla de idioma):** los frames "D02 … Ejemplar no disponible (RN-01)" y "D04 … Devuelto (RN-02)" y el hotspot "Probar RN-01" deben decir `BR-01` y `BR-02`. En D03, el texto "Evento de dominio publicado: EjemplarPrestado" debe usar el nombre del código: `CopyLent`.
+Figma sigue la regla de idioma: las reglas se nombran `BR-01` a `BR-03` y los eventos con su nombre del código (`CopyLent`, `CopyReturned`).
 
 ### Trazabilidad Handoff DDD (Figma, Confluence, código)
 
@@ -262,7 +283,7 @@ Archivo de Figma: **Biblioteca UCE** (`https://www.figma.com/design/bFFvd1YJgBEK
 | Capa `fechaLimite` | Período de préstamo | `LoanPeriod.dueOn` | `dueDate` |
 | Botón Prestar (`btnPrestar`) | Prestar | `LendCopy` y `Copy.lend()` | `POST /api/loans` |
 | D02 – Ejemplar no disponible | `BR-01` (página 6) | `CopyNotAvailableException` | 409 `{"message": "The copy is not available", "dueDate": "2026-12-10"}`; la pantalla lo muestra en español con la fecha |
-| D04 – Devuelto | `BR-02` (página 6) | `Copy.returnCopy()` | Pendiente |
+| D04 – Devuelto | `BR-02` (página 6) | `ReturnCopy` y `Copy.returnCopy()` | `POST /api/loans/{copyCode}/return` (200; 409 `CopyNotLentException`) |
 | D03 Préstamo confirmado | Eventos (página 10) | `CopyLent` | 201 Created |
 | `Organismo/Prestamos/*` | Contexto Préstamos (página 8) | Paquete `ec.edu.uce.library.lending` | — |
 
