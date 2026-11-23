@@ -30,6 +30,7 @@ ec.edu.uce.library
   "5 · Lenguaje ubicuo", "6 · Reglas e invariantes", "8 · Contextos y mapa", "9 · Modelo táctico" and
   "10 · Eventos de dominio" of the BIB space (use the Atlassian MCP). Use those exact terms. Do not invent synonyms;
   if a term is missing, ask instead of making one up.
+  If the Atlassian MCP is not available, read `docs/confluence-demo-biblioteca.md` (a Markdown copy of those pages).
 - **Business rules live in the aggregate**, not in controllers, services or the UI. The use case loads the aggregate,
   calls its method, saves it and publishes the events.
 - **Every rule has its test.** Each `BR-xx` rule gets a unit test in `domain` (JUnit 5, no Spring) whose name mentions the rule code.
