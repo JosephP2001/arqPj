@@ -81,9 +81,12 @@ class CopyTest {
     }
 
     @Test
-    void returningAnAvailableCopyFails() {
+    void returningACopyThatIsNotLentThrowsCopyNotLentException() {
         Copy copy = new Copy(new CopyId("UCE-0001"));
 
-        assertThatThrownBy(() -> copy.returnCopy(TODAY)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> copy.returnCopy(TODAY))
+                .isInstanceOf(CopyNotLentException.class)
+                .hasMessage("The copy is not lent");
+        assertThat(copy.isAvailable()).isTrue();
     }
 }

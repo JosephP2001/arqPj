@@ -1,21 +1,15 @@
 import { useState, type FormEvent } from 'react'
-import Alert, { type AlertColor } from '@mui/material/Alert'
-import AlertTitle from '@mui/material/AlertTitle'
 import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { lendCopy, LendCopyError } from './lendCopy'
+import { lendCopy, LendingApiError } from './api'
+import { formatDate, isConnectionProblem, type Outcome } from './outcome'
+import { OutcomeAlert } from './OutcomeAlert'
 
 const DEFAULT_LOAN_DAYS = 15
-
-interface Outcome {
-  severity: AlertColor
-  title?: string
-  text: string
-}
 
 function todayPlusDays(days: number): string {
   const date = new Date()
@@ -25,20 +19,9 @@ function todayPlusDays(days: number): string {
   return `${date.getFullYear()}-${month}-${day}`
 }
 
-/** "2026-12-10" -> "10/12/2026" */
-function formatDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-')
-  return `${day}/${month}/${year}`
-}
-
 function outcomeForError(error: unknown): Outcome {
-  const notConnected: Outcome = {
-    severity: 'warning',
-    text: 'No pudimos conectar con el servidor. No se registró ningún préstamo.',
-  }
-  // fetch failed (TypeError) or the dev proxy/server answered 5xx: nothing was saved.
-  if (!(error instanceof LendCopyError) || error.status >= 500) {
-    return notConnected
+  if (isConnectionProblem(error) || !(error instanceof LendingApiError)) {
+    return { severity: 'warning', text: 'No pudimos conectar con el servidor. No se registró ningún préstamo.' }
   }
   switch (error.status) {
     case 409:
@@ -127,12 +110,7 @@ export function LendCopyForm() {
             Prestar
           </Button>
 
-          {outcome && (
-            <Alert severity={outcome.severity} role={outcome.severity === 'success' ? 'status' : 'alert'}>
-              {outcome.title && <AlertTitle>{outcome.title}</AlertTitle>}
-              {outcome.text}
-            </Alert>
-          )}
+          {outcome && <OutcomeAlert outcome={outcome} />}
         </Stack>
       </CardContent>
     </Card>

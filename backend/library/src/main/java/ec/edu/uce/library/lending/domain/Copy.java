@@ -44,11 +44,11 @@ public class Copy {
     }
 
     /**
-     * Receives this Copy back. BR-02: afterwards the Copy is Available.
+     * Receives this Copy back. BR-02: afterwards the Copy is Available. Fails if the Copy has no active Loan.
      */
     public CopyReturned returnCopy(LocalDate returnedOn) {
         if (isAvailable()) {
-            throw new IllegalStateException("The copy is not lent");
+            throw new CopyNotLentException(id);
         }
         MemberId memberId = loan.memberId();
         this.loan = null;

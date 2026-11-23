@@ -99,7 +99,7 @@ flowchart TB
 | Regla | Descripción | Quién la protege | Estado |
 | --- | --- | --- | --- |
 | `BR-01` | Un ejemplar prestado no puede volver a prestarse hasta que se devuelva | `Copy.lend` → `CopyNotAvailableException` | Implementada y probada |
-| `BR-02` | La devolución de un ejemplar lo deja disponible | `Copy.returnCopy` | Implementada en el dominio y probada |
+| `BR-02` | La devolución de un ejemplar lo deja disponible | `Copy.returnCopy` (`CopyNotLentException` si no estaba prestado) | Implementada y probada |
 | `BR-03` | Un lector no puede tener más de tres préstamos activos | Por definir | **Tarea de la clase** |
 
 Cada regla tiene su prueba unitaria en `domain` (JUnit 5, sin Spring), cuyo nombre empieza con el código de la regla, por ejemplo `br01_lendingALentCopyThrowsCopyNotAvailableException`.
@@ -162,6 +162,12 @@ curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/js
 curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" \
   -d '{"copyCode":"EJ-00456","memberId":"1712345678","dueDate":"2026-12-08"}'
 # {"message":"The copy is not available","dueDate":"2026-12-10"}
+
+# BR-02: devolver un ejemplar prestado → 200 OK (409 si no tiene un préstamo activo)
+curl -i -X POST http://localhost:8080/api/loans/EJ-00456/return
+
+# Catalog recibió el evento CopyReturned → {"copyCode":"EJ-00456","timesReturned":1}
+curl -s http://localhost:8080/api/copy-usages/EJ-00456
 ```
 
 ---
@@ -208,12 +214,12 @@ El acceso a Confluence y a Figma está restringido al equipo.
 - [x] Estructura del monolito modular por contextos
 - [x] Agregado `Copy` con `BR-01` y `BR-02`, y sus pruebas
 - [x] Caso de uso `LendCopy` y endpoint `POST /api/loans` (409 al violar `BR-01`)
-- [ ] Caso de uso `ReturnCopy` y su endpoint (`BR-02` hoy solo existe en el dominio)
+- [x] Caso de uso `ReturnCopy`, endpoint `POST /api/loans/{copyCode}/return` y pantalla Devolver ejemplar (D04)
 - [x] Interfaz en español, como en Figma (pantalla Prestar ejemplar con Material UI y `frontend/src/theme.ts`)
 - [x] Bloqueo optimista (`@Version`) y transacción para proteger `BR-01` ante concurrencia
 - [x] Códigos de ejemplo iguales a Figma (`EJ-00123`, `EJ-00124`, `EJ-00456`)
 - [x] Prueba de arquitectura (ArchUnit) para los límites del monolito
-- [ ] Listener de `CopyReturned` en Catalog (depende de `ReturnCopy`)
+- [x] Catalog escucha `CopyReturned` y lleva el uso de cada ejemplar (`CopyUsage`)
 - [ ] `BR-03` (tarea de la clase)
 
 ---

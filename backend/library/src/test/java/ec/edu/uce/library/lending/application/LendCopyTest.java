@@ -4,7 +4,6 @@ import ec.edu.uce.library.lending.domain.Copy;
 import ec.edu.uce.library.lending.domain.CopyId;
 import ec.edu.uce.library.lending.domain.CopyLent;
 import ec.edu.uce.library.lending.domain.CopyNotAvailableException;
-import ec.edu.uce.library.lending.domain.CopyRepository;
 import ec.edu.uce.library.lending.domain.LoanPeriod;
 import ec.edu.uce.library.lending.domain.MemberId;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,10 +13,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,20 +58,5 @@ class LendCopyTest {
     void unknownCopyFailsWithCopyNotFoundException() {
         assertThatThrownBy(() -> lendCopy.lend(new LendCopyCommand("UCE-9999", "1712345678", TODAY.plusDays(15))))
                 .isInstanceOf(CopyNotFoundException.class);
-    }
-
-    private static final class InMemoryCopyRepository implements CopyRepository {
-
-        private final Map<CopyId, Copy> store = new HashMap<>();
-
-        @Override
-        public Optional<Copy> findById(CopyId id) {
-            return Optional.ofNullable(store.get(id));
-        }
-
-        @Override
-        public void save(Copy copy) {
-            store.put(copy.id(), copy);
-        }
     }
 }

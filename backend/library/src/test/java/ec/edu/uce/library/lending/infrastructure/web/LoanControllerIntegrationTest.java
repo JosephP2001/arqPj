@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -51,6 +52,38 @@ class LoanControllerIntegrationTest {
     void lendingAnUnknownCopyReturns404() throws Exception {
         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
                         .content(body("EJ-99999", "1712345678", LocalDate.now().plusDays(15).toString())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void br02_returnsALentCopyAndCatalogRecordsTheReturn() throws Exception {
+        String dueDate = LocalDate.now().plusDays(15).toString();
+        mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
+                        .content(body("EJ-00123", "1712345678", dueDate)))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/api/loans/EJ-00123/return"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.copyCode").value("EJ-00123"))
+                .andExpect(jsonPath("$.memberId").value("1712345678"))
+                .andExpect(jsonPath("$.returnedOn").value(LocalDate.now().toString()));
+
+        mvc.perform(get("/api/copy-usages/EJ-00123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.timesReturned").value(1));
+
+        mvc.perform(post("/api/loans/EJ-00123/return"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The copy is not lent"));
+
+        mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
+                        .content(body("EJ-00123", "1798765432", dueDate)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void returningAnUnknownCopyReturns404() throws Exception {
+        mvc.perform(post("/api/loans/EJ-99999/return"))
                 .andExpect(status().isNotFound());
     }
 
