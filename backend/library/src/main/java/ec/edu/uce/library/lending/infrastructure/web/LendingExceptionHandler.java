@@ -14,24 +14,24 @@ class LendingExceptionHandler {
     @ExceptionHandler(CopyNotAvailableException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     ErrorResponse copyNotAvailable(CopyNotAvailableException e) {
-        return new ErrorResponse(e.getMessage());
+        return new ErrorResponse(e.getMessage(), e.dueOn());
     }
 
     @ExceptionHandler(CopyNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     ErrorResponse copyNotFound(CopyNotFoundException e) {
-        return new ErrorResponse(e.getMessage());
+        return ErrorResponse.of(e.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     ErrorResponse invalidArgument(IllegalArgumentException e) {
-        return new ErrorResponse(e.getMessage());
+        return ErrorResponse.of(e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     ErrorResponse invalidRequest(MethodArgumentNotValidException e) {
-        return new ErrorResponse("Copy code, Member ID and Due date are required");
+        return ErrorResponse.of("Copy code, Member ID and Due date are required");
     }
 }

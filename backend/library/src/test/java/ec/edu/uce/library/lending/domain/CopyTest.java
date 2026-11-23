@@ -42,7 +42,9 @@ class CopyTest {
 
         assertThatThrownBy(() -> copy.lend(LUIS, PERIOD))
                 .isInstanceOf(CopyNotAvailableException.class)
-                .hasMessage("The copy is not available");
+                .hasMessage("The copy is not available")
+                .extracting(e -> ((CopyNotAvailableException) e).dueOn())
+                .isEqualTo(PERIOD.dueOn());
         assertThat(copy.loan()).hasValueSatisfying(loan -> assertThat(loan.memberId()).isEqualTo(ANA));
     }
 

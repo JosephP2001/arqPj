@@ -15,12 +15,16 @@ import java.time.Clock;
 import java.time.LocalDate;
 
 /**
- * Loads sample copies at startup: UCE-0001..UCE-0003 Available and UCE-0004 already lent.
+ * Loads the sample copies of the Figma screens at startup: EJ-00123 and EJ-00124 Available,
+ * and EJ-00456 lent to Member 1700000004 until 10/12/2026 (today + 15 days once that date has passed).
  */
 @Component
 class SampleCopiesLoader implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SampleCopiesLoader.class);
+
+    private static final LocalDate FIGMA_DUE_DATE = LocalDate.of(2026, 12, 10);
+    private static final int DEFAULT_LOAN_DAYS = 15;
 
     private final CopyRepository copies;
     private final Clock clock;
@@ -32,15 +36,15 @@ class SampleCopiesLoader implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        copies.save(new Copy(new CopyId("UCE-0001")));
-        copies.save(new Copy(new CopyId("UCE-0002")));
-        copies.save(new Copy(new CopyId("UCE-0003")));
+        copies.save(new Copy(new CopyId("EJ-00123")));
+        copies.save(new Copy(new CopyId("EJ-00124")));
 
-        Copy lent = new Copy(new CopyId("UCE-0004"));
         LocalDate today = LocalDate.now(clock);
-        lent.lend(new MemberId("1700000004"), new LoanPeriod(today.minusDays(5), today.plusDays(10)));
+        LocalDate dueOn = FIGMA_DUE_DATE.isBefore(today) ? today.plusDays(DEFAULT_LOAN_DAYS) : FIGMA_DUE_DATE;
+        Copy lent = new Copy(new CopyId("EJ-00456"));
+        lent.lend(new MemberId("1700000004"), new LoanPeriod(today.minusDays(5), dueOn));
         copies.save(lent);
 
-        log.info("Sample copies loaded: UCE-0001, UCE-0002, UCE-0003 (Available), UCE-0004 (lent)");
+        log.info("Sample copies loaded: EJ-00123, EJ-00124 (Available), EJ-00456 (lent until {})", dueOn);
     }
 }

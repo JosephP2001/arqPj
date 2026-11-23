@@ -51,8 +51,10 @@ class LendCopyTest {
         lendCopy.lend(new LendCopyCommand("UCE-0001", "1712345678", TODAY.plusDays(15)));
         published.clear();
 
-        assertThatThrownBy(() -> lendCopy.lend(new LendCopyCommand("UCE-0001", "1798765432", TODAY.plusDays(15))))
-                .isInstanceOf(CopyNotAvailableException.class);
+        assertThatThrownBy(() -> lendCopy.lend(new LendCopyCommand("UCE-0001", "1798765432", TODAY.plusDays(20))))
+                .isInstanceOf(CopyNotAvailableException.class)
+                .extracting(e -> ((CopyNotAvailableException) e).dueOn())
+                .isEqualTo(TODAY.plusDays(15));
         assertThat(published).isEmpty();
     }
 

@@ -25,31 +25,40 @@ class LoanControllerIntegrationTest {
         String dueDate = LocalDate.now().plusDays(15).toString();
 
         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
-                        .content(body("UCE-0002", "1712345678", dueDate)))
+                        .content(body("EJ-00124", "1712345678", dueDate)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.copyCode").value("UCE-0002"))
+                .andExpect(jsonPath("$.copyCode").value("EJ-00124"))
                 .andExpect(jsonPath("$.memberId").value("1712345678"))
                 .andExpect(jsonPath("$.dueDate").value(dueDate));
 
         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
-                        .content(body("UCE-0002", "1798765432", dueDate)))
+                        .content(body("EJ-00124", "1798765432", dueDate)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("The copy is not available"));
+                .andExpect(jsonPath("$.message").value("The copy is not available"))
+                .andExpect(jsonPath("$.dueDate").value(dueDate));
     }
 
     @Test
     void lendingTheSampleLentCopyReturns409() throws Exception {
         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
-                        .content(body("UCE-0004", "1712345678", LocalDate.now().plusDays(15).toString())))
+                        .content(body("EJ-00456", "1712345678", LocalDate.now().plusDays(15).toString())))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("The copy is not available"));
+                .andExpect(jsonPath("$.message").value("The copy is not available"))
+                .andExpect(jsonPath("$.dueDate").value(sampleLentCopyDueDate().toString()));
     }
 
     @Test
     void lendingAnUnknownCopyReturns404() throws Exception {
         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
-                        .content(body("UCE-9999", "1712345678", LocalDate.now().plusDays(15).toString())))
+                        .content(body("EJ-99999", "1712345678", LocalDate.now().plusDays(15).toString())))
                 .andExpect(status().isNotFound());
+    }
+
+    /** Due date of the sample copy EJ-00456 (see SampleCopiesLoader): 10/12/2026, or today + 15 once it has passed. */
+    private static LocalDate sampleLentCopyDueDate() {
+        LocalDate figmaDueDate = LocalDate.of(2026, 12, 10);
+        LocalDate today = LocalDate.now();
+        return figmaDueDate.isBefore(today) ? today.plusDays(15) : figmaDueDate;
     }
 
     private static String body(String copyCode, String memberId, String dueDate) {

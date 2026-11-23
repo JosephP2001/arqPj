@@ -63,13 +63,13 @@ npm install
 npm run dev                                # http://localhost:5173 (proxy de /api al 8080)
 ```
 
-**Copias de ejemplo** (se cargan al arrancar): `UCE-0001`, `UCE-0002` y `UCE-0003` están Available; `UCE-0004` ya está prestada.
+**Ejemplares de ejemplo** (se cargan al arrancar, iguales a Figma): `EJ-00123` y `EJ-00124` están Disponibles; `EJ-00456` está prestado al lector `1700000004` hasta el 10/12/2026 (si esa fecha ya pasó, hasta hoy + 15 días).
 
 **Provocar el 409 de BR-01:**
 
 ```bash
-curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"copyCode":"UCE-0004","memberId":"1712345678","dueDate":"2026-12-08"}'
-# HTTP/1.1 409   {"message":"The copy is not available"}
+curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"copyCode":"EJ-00456","memberId":"1712345678","dueDate":"2026-12-08"}'
+# HTTP/1.1 409   {"message":"The copy is not available","dueDate":"2026-12-10"}
 ```
 
 ## Preparación previa (el día anterior)
@@ -80,7 +80,7 @@ Prueba todo en la misma computadora y en la misma red que usarás en clase.
 - [ ] Repo clonado, en la rama `develop`, abierto en IntelliJ con el JDK 25 y el proyecto Gradle importado (`backend/library`).
 - [ ] `./gradlew test` en verde desde la terminal integrada (con `JAVA_HOME` apuntando al JDK 25).
 - [ ] `npm install` y `npm run build` en verde en `frontend`.
-- [ ] Ensayo del plan B: `git switch demo/respaldo`, arrancar backend y frontend, prestar `UCE-0001` desde la pantalla y provocar el error con `UCE-0004`. Volver a `develop`.
+- [ ] Ensayo del plan B: `git switch demo/respaldo`, arrancar backend y frontend, prestar `EJ-00123` desde la pantalla y provocar el error con `EJ-00456`. Volver a `develop`.
 - [ ] Claude Code instalado y con la sesión iniciada; `claude` responde en la terminal integrada de IntelliJ.
 - [ ] Plugin de Claude Code para JetBrains (opcional; si falla, basta la terminal integrada).
 - [ ] Páginas 5 a 10 y "Figma · Pantalla Lend copy" en el espacio BIB del Confluence.
@@ -240,7 +240,7 @@ y emitiendo los eventos de dominio. No implementes BR-03. Muéstrame el plan ant
 
 **Si el MCP no conecta:** pide a Claude que lea `docs/confluence-demo-biblioteca.md`, que es la copia en Markdown de esas páginas.
 
-**Cierre opcional (si sobra tiempo):** en `demo/respaldo`, arranca backend y frontend, presta `UCE-0001` desde la pantalla Lend copy y luego intenta `UCE-0004`: aparece "The copy is not available". La regla del agregado llega intacta hasta la interfaz.
+**Cierre opcional (si sobra tiempo):** en `demo/respaldo`, arranca backend y frontend, presta `EJ-00123` desde la pantalla Prestar ejemplar y luego intenta `EJ-00456`: aparece "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." (la API responde en inglés con `dueDate` y la pantalla lo muestra en español). La regla del agregado llega intacta hasta la interfaz.
 
 ## Plan B y problemas frecuentes
 

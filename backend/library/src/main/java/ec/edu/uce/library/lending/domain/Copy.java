@@ -37,7 +37,7 @@ public class Copy {
      */
     public CopyLent lend(MemberId memberId, LoanPeriod period) {
         if (!isAvailable()) {
-            throw new CopyNotAvailableException(id);
+            throw new CopyNotAvailableException(id, loan.period().dueOn());
         }
         this.loan = new Loan(memberId, period);
         return new CopyLent(id, memberId, period);
