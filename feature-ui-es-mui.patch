@@ -1,0 +1,1893 @@
+diff --git a/backend/library/src/main/java/ec/edu/uce/library/lending/application/LendCopyCommand.java b/backend/library/src/main/java/ec/edu/uce/library/lending/application/LendCopyCommand.java
+index b6ae2e5..6de7c6e 100644
+--- a/backend/library/src/main/java/ec/edu/uce/library/lending/application/LendCopyCommand.java
++++ b/backend/library/src/main/java/ec/edu/uce/library/lending/application/LendCopyCommand.java
+@@ -3,7 +3,7 @@ package ec.edu.uce.library.lending.application;
+ import java.time.LocalDate;
+ 
+ /**
+- * Input of {@link LendCopy}: the fields of the "Lend copy" screen.
++ * Input of {@link LendCopy}: the fields of the "Prestar ejemplar" screen (Figma D02).
+  */
+ public record LendCopyCommand(String copyCode, String memberId, LocalDate dueDate) {
+ }
+diff --git a/backend/library/src/main/java/ec/edu/uce/library/lending/domain/Copy.java b/backend/library/src/main/java/ec/edu/uce/library/lending/domain/Copy.java
+index fabf2bd..ea4c2d6 100644
+--- a/backend/library/src/main/java/ec/edu/uce/library/lending/domain/Copy.java
++++ b/backend/library/src/main/java/ec/edu/uce/library/lending/domain/Copy.java
+@@ -37,7 +37,7 @@ public class Copy {
+      */
+     public CopyLent lend(MemberId memberId, LoanPeriod period) {
+         if (!isAvailable()) {
+-            throw new CopyNotAvailableException(id);
++            throw new CopyNotAvailableException(id, loan.period().dueOn());
+         }
+         this.loan = new Loan(memberId, period);
+         return new CopyLent(id, memberId, period);
+diff --git a/backend/library/src/main/java/ec/edu/uce/library/lending/domain/CopyNotAvailableException.java b/backend/library/src/main/java/ec/edu/uce/library/lending/domain/CopyNotAvailableException.java
+index e4af1c6..74a73a6 100644
+--- a/backend/library/src/main/java/ec/edu/uce/library/lending/domain/CopyNotAvailableException.java
++++ b/backend/library/src/main/java/ec/edu/uce/library/lending/domain/CopyNotAvailableException.java
+@@ -1,18 +1,27 @@
+ package ec.edu.uce.library.lending.domain;
+ 
++import java.time.LocalDate;
++
+ /**
+  * Thrown when BR-01 is violated: a lent Copy cannot be lent again until it is returned.
++ * Carries the due date of the active Loan, so the caller can say until when the Copy is lent.
+  */
+ public class CopyNotAvailableException extends RuntimeException {
+ 
+     private final CopyId copyId;
++    private final LocalDate dueOn;
+ 
+-    public CopyNotAvailableException(CopyId copyId) {
++    public CopyNotAvailableException(CopyId copyId, LocalDate dueOn) {
+         super("The copy is not available");
+         this.copyId = copyId;
++        this.dueOn = dueOn;
+     }
+ 
+     public CopyId copyId() {
+         return copyId;
+     }
++
++    public LocalDate dueOn() {
++        return dueOn;
++    }
+ }
+diff --git a/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/config/SampleCopiesLoader.java b/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/config/SampleCopiesLoader.java
+index a9920ec..b562883 100644
+--- a/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/config/SampleCopiesLoader.java
++++ b/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/config/SampleCopiesLoader.java
+@@ -15,13 +15,17 @@ import java.time.Clock;
+ import java.time.LocalDate;
+ 
+ /**
+- * Loads sample copies at startup: UCE-0001..UCE-0003 Available and UCE-0004 already lent.
++ * Loads the sample copies of the Figma screens at startup: EJ-00123 and EJ-00124 Available,
++ * and EJ-00456 lent to Member 1700000004 until 10/12/2026 (today + 15 days once that date has passed).
+  */
+ @Component
+ class SampleCopiesLoader implements ApplicationRunner {
+ 
+     private static final Logger log = LoggerFactory.getLogger(SampleCopiesLoader.class);
+ 
++    private static final LocalDate FIGMA_DUE_DATE = LocalDate.of(2026, 12, 10);
++    private static final int DEFAULT_LOAN_DAYS = 15;
++
+     private final CopyRepository copies;
+     private final Clock clock;
+ 
+@@ -32,15 +36,15 @@ class SampleCopiesLoader implements ApplicationRunner {
+ 
+     @Override
+     public void run(ApplicationArguments args) {
+-        copies.save(new Copy(new CopyId("UCE-0001")));
+-        copies.save(new Copy(new CopyId("UCE-0002")));
+-        copies.save(new Copy(new CopyId("UCE-0003")));
++        copies.save(new Copy(new CopyId("EJ-00123")));
++        copies.save(new Copy(new CopyId("EJ-00124")));
+ 
+-        Copy lent = new Copy(new CopyId("UCE-0004"));
+         LocalDate today = LocalDate.now(clock);
+-        lent.lend(new MemberId("1700000004"), new LoanPeriod(today.minusDays(5), today.plusDays(10)));
++        LocalDate dueOn = FIGMA_DUE_DATE.isBefore(today) ? today.plusDays(DEFAULT_LOAN_DAYS) : FIGMA_DUE_DATE;
++        Copy lent = new Copy(new CopyId("EJ-00456"));
++        lent.lend(new MemberId("1700000004"), new LoanPeriod(today.minusDays(5), dueOn));
+         copies.save(lent);
+ 
+-        log.info("Sample copies loaded: UCE-0001, UCE-0002, UCE-0003 (Available), UCE-0004 (lent)");
++        log.info("Sample copies loaded: EJ-00123, EJ-00124 (Available), EJ-00456 (lent until {})", dueOn);
+     }
+ }
+diff --git a/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/ErrorResponse.java b/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/ErrorResponse.java
+index dcd4a19..8cf37b5 100644
+--- a/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/ErrorResponse.java
++++ b/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/ErrorResponse.java
+@@ -1,4 +1,13 @@
+ package ec.edu.uce.library.lending.infrastructure.web;
+ 
+-record ErrorResponse(String message) {
++import java.time.LocalDate;
++
++/**
++ * Error body of the lending API. {@code dueDate} is only set for BR-01 (409): the due date of the active Loan.
++ */
++record ErrorResponse(String message, LocalDate dueDate) {
++
++    static ErrorResponse of(String message) {
++        return new ErrorResponse(message, null);
++    }
+ }
+diff --git a/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/LendingExceptionHandler.java b/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/LendingExceptionHandler.java
+index ada1f76..faece7a 100644
+--- a/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/LendingExceptionHandler.java
++++ b/backend/library/src/main/java/ec/edu/uce/library/lending/infrastructure/web/LendingExceptionHandler.java
+@@ -14,24 +14,24 @@ class LendingExceptionHandler {
+     @ExceptionHandler(CopyNotAvailableException.class)
+     @ResponseStatus(HttpStatus.CONFLICT)
+     ErrorResponse copyNotAvailable(CopyNotAvailableException e) {
+-        return new ErrorResponse(e.getMessage());
++        return new ErrorResponse(e.getMessage(), e.dueOn());
+     }
+ 
+     @ExceptionHandler(CopyNotFoundException.class)
+     @ResponseStatus(HttpStatus.NOT_FOUND)
+     ErrorResponse copyNotFound(CopyNotFoundException e) {
+-        return new ErrorResponse(e.getMessage());
++        return ErrorResponse.of(e.getMessage());
+     }
+ 
+     @ExceptionHandler(IllegalArgumentException.class)
+     @ResponseStatus(HttpStatus.BAD_REQUEST)
+     ErrorResponse invalidArgument(IllegalArgumentException e) {
+-        return new ErrorResponse(e.getMessage());
++        return ErrorResponse.of(e.getMessage());
+     }
+ 
+     @ExceptionHandler(MethodArgumentNotValidException.class)
+     @ResponseStatus(HttpStatus.BAD_REQUEST)
+     ErrorResponse invalidRequest(MethodArgumentNotValidException e) {
+-        return new ErrorResponse("Copy code, Member ID and Due date are required");
++        return ErrorResponse.of("Copy code, Member ID and Due date are required");
+     }
+ }
+diff --git a/backend/library/src/test/java/ec/edu/uce/library/lending/application/LendCopyTest.java b/backend/library/src/test/java/ec/edu/uce/library/lending/application/LendCopyTest.java
+index cf56d0c..8d9e3c8 100644
+--- a/backend/library/src/test/java/ec/edu/uce/library/lending/application/LendCopyTest.java
++++ b/backend/library/src/test/java/ec/edu/uce/library/lending/application/LendCopyTest.java
+@@ -51,8 +51,10 @@ class LendCopyTest {
+         lendCopy.lend(new LendCopyCommand("UCE-0001", "1712345678", TODAY.plusDays(15)));
+         published.clear();
+ 
+-        assertThatThrownBy(() -> lendCopy.lend(new LendCopyCommand("UCE-0001", "1798765432", TODAY.plusDays(15))))
+-                .isInstanceOf(CopyNotAvailableException.class);
++        assertThatThrownBy(() -> lendCopy.lend(new LendCopyCommand("UCE-0001", "1798765432", TODAY.plusDays(20))))
++                .isInstanceOf(CopyNotAvailableException.class)
++                .extracting(e -> ((CopyNotAvailableException) e).dueOn())
++                .isEqualTo(TODAY.plusDays(15));
+         assertThat(published).isEmpty();
+     }
+ 
+diff --git a/backend/library/src/test/java/ec/edu/uce/library/lending/domain/CopyTest.java b/backend/library/src/test/java/ec/edu/uce/library/lending/domain/CopyTest.java
+index bfc6c9d..c399aa2 100644
+--- a/backend/library/src/test/java/ec/edu/uce/library/lending/domain/CopyTest.java
++++ b/backend/library/src/test/java/ec/edu/uce/library/lending/domain/CopyTest.java
+@@ -42,7 +42,9 @@ class CopyTest {
+ 
+         assertThatThrownBy(() -> copy.lend(LUIS, PERIOD))
+                 .isInstanceOf(CopyNotAvailableException.class)
+-                .hasMessage("The copy is not available");
++                .hasMessage("The copy is not available")
++                .extracting(e -> ((CopyNotAvailableException) e).dueOn())
++                .isEqualTo(PERIOD.dueOn());
+         assertThat(copy.loan()).hasValueSatisfying(loan -> assertThat(loan.memberId()).isEqualTo(ANA));
+     }
+ 
+diff --git a/backend/library/src/test/java/ec/edu/uce/library/lending/infrastructure/web/LoanControllerIntegrationTest.java b/backend/library/src/test/java/ec/edu/uce/library/lending/infrastructure/web/LoanControllerIntegrationTest.java
+index 6c85db0..18ced5c 100644
+--- a/backend/library/src/test/java/ec/edu/uce/library/lending/infrastructure/web/LoanControllerIntegrationTest.java
++++ b/backend/library/src/test/java/ec/edu/uce/library/lending/infrastructure/web/LoanControllerIntegrationTest.java
+@@ -25,33 +25,42 @@ class LoanControllerIntegrationTest {
+         String dueDate = LocalDate.now().plusDays(15).toString();
+ 
+         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
+-                        .content(body("UCE-0002", "1712345678", dueDate)))
++                        .content(body("EJ-00124", "1712345678", dueDate)))
+                 .andExpect(status().isCreated())
+-                .andExpect(jsonPath("$.copyCode").value("UCE-0002"))
++                .andExpect(jsonPath("$.copyCode").value("EJ-00124"))
+                 .andExpect(jsonPath("$.memberId").value("1712345678"))
+                 .andExpect(jsonPath("$.dueDate").value(dueDate));
+ 
+         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
+-                        .content(body("UCE-0002", "1798765432", dueDate)))
++                        .content(body("EJ-00124", "1798765432", dueDate)))
+                 .andExpect(status().isConflict())
+-                .andExpect(jsonPath("$.message").value("The copy is not available"));
++                .andExpect(jsonPath("$.message").value("The copy is not available"))
++                .andExpect(jsonPath("$.dueDate").value(dueDate));
+     }
+ 
+     @Test
+     void lendingTheSampleLentCopyReturns409() throws Exception {
+         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
+-                        .content(body("UCE-0004", "1712345678", LocalDate.now().plusDays(15).toString())))
++                        .content(body("EJ-00456", "1712345678", LocalDate.now().plusDays(15).toString())))
+                 .andExpect(status().isConflict())
+-                .andExpect(jsonPath("$.message").value("The copy is not available"));
++                .andExpect(jsonPath("$.message").value("The copy is not available"))
++                .andExpect(jsonPath("$.dueDate").value(sampleLentCopyDueDate().toString()));
+     }
+ 
+     @Test
+     void lendingAnUnknownCopyReturns404() throws Exception {
+         mvc.perform(post("/api/loans").contentType(MediaType.APPLICATION_JSON)
+-                        .content(body("UCE-9999", "1712345678", LocalDate.now().plusDays(15).toString())))
++                        .content(body("EJ-99999", "1712345678", LocalDate.now().plusDays(15).toString())))
+                 .andExpect(status().isNotFound());
+     }
+ 
++    /** Due date of the sample copy EJ-00456 (see SampleCopiesLoader): 10/12/2026, or today + 15 once it has passed. */
++    private static LocalDate sampleLentCopyDueDate() {
++        LocalDate figmaDueDate = LocalDate.of(2026, 12, 10);
++        LocalDate today = LocalDate.now();
++        return figmaDueDate.isBefore(today) ? today.plusDays(15) : figmaDueDate;
++    }
++
+     private static String body(String copyCode, String memberId, String dueDate) {
+         return """
+                 {"copyCode": "%s", "memberId": "%s", "dueDate": "%s"}
+diff --git a/frontend/index.html b/frontend/index.html
+index 2ed928c..5d52a58 100644
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -1,10 +1,10 @@
+ <!doctype html>
+-<html lang="en">
++<html lang="es">
+   <head>
+     <meta charset="UTF-8" />
+     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>UCE Library · Lend copy</title>
++    <title>Biblioteca UCE · Préstamos</title>
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/frontend/package-lock.json b/frontend/package-lock.json
+index 98a3bc4..bb013e6 100644
+--- a/frontend/package-lock.json
++++ b/frontend/package-lock.json
+@@ -8,6 +8,10 @@
+       "name": "frontend",
+       "version": "0.0.0",
+       "dependencies": {
++        "@emotion/react": "^11.14.0",
++        "@emotion/styled": "^11.14.1",
++        "@mui/icons-material": "^9.5.0",
++        "@mui/material": "^9.5.0",
+         "react": "^19.3.1",
+         "react-dom": "^19.3.1"
+       },
+@@ -21,6 +25,145 @@
+         "vite": "^8.3.6"
+       }
+     },
++    "node_modules/@babel/code-frame": {
++      "version": "7.29.7",
++      "resolved": "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.7.tgz",
++      "integrity": "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-validator-identifier": "^7.29.7",
++        "js-tokens": "^4.0.0",
++        "picocolors": "^1.1.1"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/generator": {
++      "version": "7.29.15",
++      "resolved": "https://registry.npmjs.org/@babel/generator/-/generator-7.29.15.tgz",
++      "integrity": "sha512-gNWJUX0FlevflramOkaInywOMhU1lkln38gAC7TFZv2tsWbLYbN/2WZFGcq8zbX0Z55e4vGa27IB/NaeZoauWQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/parser": "^7.29.15",
++        "@babel/types": "^7.29.15",
++        "@jridgewell/gen-mapping": "^0.3.12",
++        "@jridgewell/trace-mapping": "^0.3.28",
++        "jsesc": "^3.0.2"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-globals": {
++      "version": "7.29.7",
++      "resolved": "https://registry.npmjs.org/@babel/helper-globals/-/helper-globals-7.29.7.tgz",
++      "integrity": "sha512-3nQVUAtvkKH9zahfWgw96Jc/uFOmjACE1kQz82E2lqWmHBgjzbNlsC22nuQTfahmWeQtTq5nQ/4Nnd2A1wj4zA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-module-imports": {
++      "version": "7.29.7",
++      "resolved": "https://registry.npmjs.org/@babel/helper-module-imports/-/helper-module-imports-7.29.7.tgz",
++      "integrity": "sha512-ejHwrQQYcm9xnTivShn2IDOlIzInN34AXskvq9QicvCtEzq1Vzclu/tKF8Jq1Cg8JG2GL6/EmjgsCT7lXepE3g==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/traverse": "^7.29.7",
++        "@babel/types": "^7.29.7"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-string-parser": {
++      "version": "7.29.15",
++      "resolved": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.29.15.tgz",
++      "integrity": "sha512-C2FuapQ2Kh1OnVHAoLi5rD3GBJ8COb9Q609T6HEpLqaBAo560PDP5OxBE5dCI/h951MBO/+bCUYU5SZ+8ZlV+w==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/helper-validator-identifier": {
++      "version": "7.29.7",
++      "resolved": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.29.7.tgz",
++      "integrity": "sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/parser": {
++      "version": "7.29.15",
++      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.15.tgz",
++      "integrity": "sha512-RpKWyisHoP81twtSCgmE02iU0RnPcq1DN5bBEbpUePrjA9Q3wXhufnCJrrayPpoZieqFh3zyZQqwtSK0gGccRA==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/types": "^7.29.15"
++      },
++      "bin": {
++        "parser": "bin/babel-parser.js"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@babel/runtime": {
++      "version": "7.29.15",
++      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.15.tgz",
++      "integrity": "sha512-304gsbbGVmQc+cNGHzwHBlqepYdWLKj3VXCQBGt/EGcV7PUPfKI7kAUNW1FZEOCwlQiLvQjg1JEaAlRQ616h+Q==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/template": {
++      "version": "7.29.7",
++      "resolved": "https://registry.npmjs.org/@babel/template/-/template-7.29.7.tgz",
++      "integrity": "sha512-puq+Gf35oI24FeN11LkoUQFqv9uwNeWpxXZi/Ji3rRIoKAzKnxRaZ+Gkj0vKS9ZCiTESfng1N9LyOyXvo+m+Gg==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/code-frame": "^7.29.7",
++        "@babel/parser": "^7.29.7",
++        "@babel/types": "^7.29.7"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/traverse": {
++      "version": "7.29.15",
++      "resolved": "https://registry.npmjs.org/@babel/traverse/-/traverse-7.29.15.tgz",
++      "integrity": "sha512-ZfawBo2i8vvt+BTt37dWDKBPjUfm/H+bw+ltwsCRhW7gPtyNVwUXuNo54eO2Xo+P4VXpalPFfFISbBTRKC8SOQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/code-frame": "^7.29.7",
++        "@babel/generator": "^7.29.15",
++        "@babel/helper-globals": "^7.29.7",
++        "@babel/parser": "^7.29.15",
++        "@babel/template": "^7.29.7",
++        "@babel/types": "^7.29.15",
++        "debug": "^4.3.1"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
++    "node_modules/@babel/types": {
++      "version": "7.29.15",
++      "resolved": "https://registry.npmjs.org/@babel/types/-/types-7.29.15.tgz",
++      "integrity": "sha512-/XKpKDakL//LZ66bq1XsZOswuqeI5MZqPLDu18o3XdkU1fNJ7bdPtzgnc4ZNS+bBGHV0FJG8jjb8SwcC3nNVQQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-string-parser": "^7.29.15",
++        "@babel/helper-validator-identifier": "^7.29.7"
++      },
++      "engines": {
++        "node": ">=6.9.0"
++      }
++    },
+     "node_modules/@emnapi/core": {
+       "version": "2.0.0-beta.2",
+       "resolved": "https://registry.npmjs.org/@emnapi/core/-/core-2.0.0-beta.2.tgz",
+@@ -55,6 +198,420 @@
+         "tslib": "^2.4.0"
+       }
+     },
++    "node_modules/@emotion/babel-plugin": {
++      "version": "11.13.5",
++      "resolved": "https://registry.npmjs.org/@emotion/babel-plugin/-/babel-plugin-11.13.5.tgz",
++      "integrity": "sha512-pxHCpT2ex+0q+HH91/zsdHkw/lXd468DIN2zvfvLtPKLLMo6gQj7oLObq8PhkrxOZb/gGCq03S3Z7PDhS8pduQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/helper-module-imports": "^7.16.7",
++        "@babel/runtime": "^7.18.3",
++        "@emotion/hash": "^0.9.2",
++        "@emotion/memoize": "^0.9.0",
++        "@emotion/serialize": "^1.3.3",
++        "babel-plugin-macros": "^3.1.0",
++        "convert-source-map": "^1.5.0",
++        "escape-string-regexp": "^4.0.0",
++        "find-root": "^1.1.0",
++        "source-map": "^0.5.7",
++        "stylis": "4.2.0"
++      }
++    },
++    "node_modules/@emotion/cache": {
++      "version": "11.14.0",
++      "resolved": "https://registry.npmjs.org/@emotion/cache/-/cache-11.14.0.tgz",
++      "integrity": "sha512-L/B1lc/TViYk4DcpGxtAVbx0ZyiKM5ktoIyafGkH6zg/tj+mA+NE//aPYKG0k8kCHSHVJrpLpcAlOBEXQ3SavA==",
++      "license": "MIT",
++      "dependencies": {
++        "@emotion/memoize": "^0.9.0",
++        "@emotion/sheet": "^1.4.0",
++        "@emotion/utils": "^1.4.2",
++        "@emotion/weak-memoize": "^0.4.0",
++        "stylis": "4.2.0"
++      }
++    },
++    "node_modules/@emotion/hash": {
++      "version": "0.9.2",
++      "resolved": "https://registry.npmjs.org/@emotion/hash/-/hash-0.9.2.tgz",
++      "integrity": "sha512-MyqliTZGuOm3+5ZRSaaBGP3USLw6+EGykkwZns2EPC5g8jJ4z9OrdZY9apkl3+UP9+sdz76YYkwCKP5gh8iY3g==",
++      "license": "MIT"
++    },
++    "node_modules/@emotion/is-prop-valid": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/@emotion/is-prop-valid/-/is-prop-valid-1.4.0.tgz",
++      "integrity": "sha512-QgD4fyscGcbbKwJmqNvUMSE02OsHUa+lAWKdEUIJKgqe5IwRSKd7+KhibEWdaKwgjLj0DRSHA9biAIqGBk05lw==",
++      "license": "MIT",
++      "dependencies": {
++        "@emotion/memoize": "^0.9.0"
++      }
++    },
++    "node_modules/@emotion/memoize": {
++      "version": "0.9.0",
++      "resolved": "https://registry.npmjs.org/@emotion/memoize/-/memoize-0.9.0.tgz",
++      "integrity": "sha512-30FAj7/EoJ5mwVPOWhAyCX+FPfMDrVecJAM+Iw9NRoSl4BBAQeqj4cApHHUXOVvIPgLVDsCFoz/hGD+5QQD1GQ==",
++      "license": "MIT"
++    },
++    "node_modules/@emotion/react": {
++      "version": "11.14.0",
++      "resolved": "https://registry.npmjs.org/@emotion/react/-/react-11.14.0.tgz",
++      "integrity": "sha512-O000MLDBDdk/EohJPFUqvnp4qnHeYkVP5B0xEG0D/L7cOKP9kefu2DXn8dj74cQfsEzUqh+sr1RzFqiL1o+PpA==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.18.3",
++        "@emotion/babel-plugin": "^11.13.5",
++        "@emotion/cache": "^11.14.0",
++        "@emotion/serialize": "^1.3.3",
++        "@emotion/use-insertion-effect-with-fallbacks": "^1.2.0",
++        "@emotion/utils": "^1.4.2",
++        "@emotion/weak-memoize": "^0.4.0",
++        "hoist-non-react-statics": "^3.3.1"
++      },
++      "peerDependencies": {
++        "react": ">=16.8.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@emotion/serialize": {
++      "version": "1.3.3",
++      "resolved": "https://registry.npmjs.org/@emotion/serialize/-/serialize-1.3.3.tgz",
++      "integrity": "sha512-EISGqt7sSNWHGI76hC7x1CksiXPahbxEOrC5RjmFRJTqLyEK9/9hZvBbiYn70dw4wuwMKiEMCUlR6ZXTSWQqxA==",
++      "license": "MIT",
++      "dependencies": {
++        "@emotion/hash": "^0.9.2",
++        "@emotion/memoize": "^0.9.0",
++        "@emotion/unitless": "^0.10.0",
++        "@emotion/utils": "^1.4.2",
++        "csstype": "^3.0.2"
++      }
++    },
++    "node_modules/@emotion/sheet": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/@emotion/sheet/-/sheet-1.4.0.tgz",
++      "integrity": "sha512-fTBW9/8r2w3dXWYM4HCB1Rdp8NLibOw2+XELH5m5+AkWiL/KqYX6dc0kKYlaYyKjrQ6ds33MCdMPEwgs2z1rqg==",
++      "license": "MIT"
++    },
++    "node_modules/@emotion/styled": {
++      "version": "11.14.1",
++      "resolved": "https://registry.npmjs.org/@emotion/styled/-/styled-11.14.1.tgz",
++      "integrity": "sha512-qEEJt42DuToa3gurlH4Qqc1kVpNq8wO8cJtDzU46TjlzWjDlsVyevtYCRijVq3SrHsROS+gVQ8Fnea108GnKzw==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.18.3",
++        "@emotion/babel-plugin": "^11.13.5",
++        "@emotion/is-prop-valid": "^1.3.0",
++        "@emotion/serialize": "^1.3.3",
++        "@emotion/use-insertion-effect-with-fallbacks": "^1.2.0",
++        "@emotion/utils": "^1.4.2"
++      },
++      "peerDependencies": {
++        "@emotion/react": "^11.0.0-rc.0",
++        "react": ">=16.8.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@emotion/unitless": {
++      "version": "0.10.0",
++      "resolved": "https://registry.npmjs.org/@emotion/unitless/-/unitless-0.10.0.tgz",
++      "integrity": "sha512-dFoMUuQA20zvtVTuxZww6OHoJYgrzfKM1t52mVySDJnMSEa08ruEvdYQbhvyu6soU+NeLVd3yKfTfT0NeV6qGg==",
++      "license": "MIT"
++    },
++    "node_modules/@emotion/use-insertion-effect-with-fallbacks": {
++      "version": "1.2.0",
++      "resolved": "https://registry.npmjs.org/@emotion/use-insertion-effect-with-fallbacks/-/use-insertion-effect-with-fallbacks-1.2.0.tgz",
++      "integrity": "sha512-yJMtVdH59sxi/aVJBpk9FQq+OR8ll5GT8oWd57UpeaKEVGab41JWaCFA7FRLoMLloOZF/c/wsPoe+bfGmRKgDg==",
++      "license": "MIT",
++      "peerDependencies": {
++        "react": ">=16.8.0"
++      }
++    },
++    "node_modules/@emotion/utils": {
++      "version": "1.4.2",
++      "resolved": "https://registry.npmjs.org/@emotion/utils/-/utils-1.4.2.tgz",
++      "integrity": "sha512-3vLclRofFziIa3J2wDh9jjbkUz9qk5Vi3IZ/FSTKViB0k+ef0fPV7dYrUIugbgupYDx7v9ud/SjrtEP8Y4xLoA==",
++      "license": "MIT"
++    },
++    "node_modules/@emotion/weak-memoize": {
++      "version": "0.4.0",
++      "resolved": "https://registry.npmjs.org/@emotion/weak-memoize/-/weak-memoize-0.4.0.tgz",
++      "integrity": "sha512-snKqtPW01tN0ui7yu9rGv69aJXr/a/Ywvl11sUjNtEcRc+ng/mQriFL0wLXMef74iHa/EkftbDzU9F8iFbH+zg==",
++      "license": "MIT"
++    },
++    "node_modules/@jridgewell/gen-mapping": {
++      "version": "0.3.13",
++      "resolved": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
++      "integrity": "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==",
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/sourcemap-codec": "^1.5.0",
++        "@jridgewell/trace-mapping": "^0.3.24"
++      }
++    },
++    "node_modules/@jridgewell/resolve-uri": {
++      "version": "3.1.3",
++      "resolved": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.3.tgz",
++      "integrity": "sha512-lhTtjtoEArWBjismtfS761S9Hlyn+nIZqOZVYoZ1Xn82PMNMVnk+jj/NhC4fAXGTs7ydONcJiR5vyQBTMDu27g==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
++    "node_modules/@jridgewell/sourcemap-codec": {
++      "version": "1.6.0",
++      "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.6.0.tgz",
++      "integrity": "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==",
++      "license": "MIT"
++    },
++    "node_modules/@jridgewell/trace-mapping": {
++      "version": "0.3.31",
++      "resolved": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
++      "integrity": "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==",
++      "license": "MIT",
++      "dependencies": {
++        "@jridgewell/resolve-uri": "^3.1.0",
++        "@jridgewell/sourcemap-codec": "^1.4.14"
++      }
++    },
++    "node_modules/@mui/core-downloads-tracker": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/core-downloads-tracker/-/core-downloads-tracker-9.5.0.tgz",
++      "integrity": "sha512-PErEpl3Lp+1ZqWYKI7GQU8XSiciAFmLbUAZ7IoaUL598HLy1UAFuEUMEJu8yAS1v8vkXYzWprMVZzky4UwXoOA==",
++      "license": "MIT",
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/mui-org"
++      }
++    },
++    "node_modules/@mui/icons-material": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/icons-material/-/icons-material-9.5.0.tgz",
++      "integrity": "sha512-dahtVaqnRUIBgaZ4WC9EdP+LgJ5d2rslASYIX+nDFG6+ssUiM11jQ+Gd1wH8vhUGoNA9ES40MYics5BI8zJFXQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.29.7 || ^8.0.5"
++      },
++      "engines": {
++        "node": ">=14.0.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/mui-org"
++      },
++      "peerDependencies": {
++        "@mui/material": "^9.5.0",
++        "@types/react": "^17.0.0 || ^18.0.0 || ^19.0.0",
++        "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@mui/material": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/material/-/material-9.5.0.tgz",
++      "integrity": "sha512-QgqvdVjZoKxP8E8SBxYY6LrdV+kw00moXweZQWBbMMdifPKZAGfUaaXhGKIca6fjKnCL6HJIe/AWWCpqNvyHVw==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.29.7 || ^8.0.5",
++        "@mui/core-downloads-tracker": "^9.5.0",
++        "@mui/system": "^9.5.0",
++        "@mui/types": "^9.5.0",
++        "@mui/utils": "^9.5.0",
++        "@popperjs/core": "^2.11.8",
++        "@types/react-transition-group": "^4.4.12",
++        "clsx": "^2.1.1",
++        "csstype": "^3.2.3",
++        "prop-types": "^15.8.1",
++        "react-is": "^19.3.0",
++        "react-transition-group": "^4.4.5"
++      },
++      "engines": {
++        "node": ">=14.0.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/mui-org"
++      },
++      "peerDependencies": {
++        "@emotion/react": "^11.5.0",
++        "@emotion/styled": "^11.3.0",
++        "@mui/material-pigment-css": "^9.5.0",
++        "@types/react": "^17.0.0 || ^18.0.0 || ^19.0.0",
++        "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
++        "react-dom": "^17.0.0 || ^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@emotion/react": {
++          "optional": true
++        },
++        "@emotion/styled": {
++          "optional": true
++        },
++        "@mui/material-pigment-css": {
++          "optional": true
++        },
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@mui/private-theming": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/private-theming/-/private-theming-9.5.0.tgz",
++      "integrity": "sha512-UHZKySlr4ZJeA5HEhe/Tq1fhsR5573ViKYn7JV80dCVJtgqRQIplRSer1DHPg2Yi22llX7QRhgM0Vtrx4kZHSA==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.29.7 || ^8.0.5",
++        "@mui/utils": "^9.5.0",
++        "prop-types": "^15.8.1"
++      },
++      "engines": {
++        "node": ">=14.0.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/mui-org"
++      },
++      "peerDependencies": {
++        "@types/react": "^17.0.0 || ^18.0.0 || ^19.0.0",
++        "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@mui/styled-engine": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/styled-engine/-/styled-engine-9.5.0.tgz",
++      "integrity": "sha512-IX1ceHnZ0bJgzJRWO/Ayl4ME1rNmpWVYwV28yb089UAMR17rJkV1qfr7ApsWQXXPi1oi+2JapJrWQAiAnTlJHQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.29.7 || ^8.0.5",
++        "@emotion/cache": "^11.14.0",
++        "@emotion/serialize": "^1.3.3",
++        "@emotion/sheet": "^1.4.0",
++        "csstype": "^3.2.3",
++        "prop-types": "^15.8.1"
++      },
++      "engines": {
++        "node": ">=14.0.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/mui-org"
++      },
++      "peerDependencies": {
++        "@emotion/react": "^11.4.1",
++        "@emotion/styled": "^11.3.0",
++        "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@emotion/react": {
++          "optional": true
++        },
++        "@emotion/styled": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@mui/system": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/system/-/system-9.5.0.tgz",
++      "integrity": "sha512-OZuAwvoiaaHpvn0a540VH1DUwwmojJubGfNmO2g+nb2ybNDP4/gF7t7aA6AMduELSuJ5yxwlzyFvUO3CfLv1Yg==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.29.7 || ^8.0.5",
++        "@mui/private-theming": "^9.5.0",
++        "@mui/styled-engine": "^9.5.0",
++        "@mui/types": "^9.5.0",
++        "@mui/utils": "^9.5.0",
++        "clsx": "^2.1.1",
++        "csstype": "^3.2.3",
++        "prop-types": "^15.8.1"
++      },
++      "engines": {
++        "node": ">=14.0.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/mui-org"
++      },
++      "peerDependencies": {
++        "@emotion/react": "^11.5.0",
++        "@emotion/styled": "^11.3.0",
++        "@types/react": "^17.0.0 || ^18.0.0 || ^19.0.0",
++        "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@emotion/react": {
++          "optional": true
++        },
++        "@emotion/styled": {
++          "optional": true
++        },
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@mui/types": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/types/-/types-9.5.0.tgz",
++      "integrity": "sha512-O0S6xS80qEQqW2CYNrd4GlBEQ1xpMOHZ5b4zO/DaLu6NZmtthM6smEg0Gz/u9gX5vL+8NB3EiBIxmxSCcG590Q==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.29.7 || ^8.0.5"
++      },
++      "peerDependencies": {
++        "@types/react": "^17.0.0 || ^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/@mui/utils": {
++      "version": "9.5.0",
++      "resolved": "https://registry.npmjs.org/@mui/utils/-/utils-9.5.0.tgz",
++      "integrity": "sha512-8m0LfSgE2pj58znY3kZ+anwRKbnBkcu/7AJPA8L/77wEjN0QnpX4/zRAccyplp1VEUnMsUBADeTRin5Mkf7epA==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.29.7 || ^8.0.5",
++        "@mui/types": "^9.5.0",
++        "@types/prop-types": "^15.7.15",
++        "clsx": "^2.1.1",
++        "prop-types": "^15.8.1",
++        "react-is": "^19.3.0"
++      },
++      "engines": {
++        "node": ">=14.0.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/mui-org"
++      },
++      "peerDependencies": {
++        "@types/react": "^17.0.0 || ^18.0.0 || ^19.0.0",
++        "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@types/react": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/@napi-rs/wasm-runtime": {
+       "version": "1.2.6",
+       "resolved": "https://registry.npmjs.org/@napi-rs/wasm-runtime/-/wasm-runtime-1.2.6.tgz",
+@@ -410,6 +967,16 @@
+         "node": "^20.19.0 || >=22.12.0"
+       }
+     },
++    "node_modules/@popperjs/core": {
++      "version": "2.11.8",
++      "resolved": "https://registry.npmjs.org/@popperjs/core/-/core-2.11.8.tgz",
++      "integrity": "sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==",
++      "license": "MIT",
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/popperjs"
++      }
++    },
+     "node_modules/@rolldown/binding-android-arm-eabi": {
+       "version": "1.2.19",
+       "resolved": "https://registry.npmjs.org/@rolldown/binding-android-arm-eabi/-/binding-android-arm-eabi-1.2.19.tgz",
+@@ -712,11 +1279,22 @@
+         "undici-types": ">=7.24.0 <7.24.7"
+       }
+     },
++    "node_modules/@types/parse-json": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/@types/parse-json/-/parse-json-4.0.2.tgz",
++      "integrity": "sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==",
++      "license": "MIT"
++    },
++    "node_modules/@types/prop-types": {
++      "version": "15.7.15",
++      "resolved": "https://registry.npmjs.org/@types/prop-types/-/prop-types-15.7.15.tgz",
++      "integrity": "sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==",
++      "license": "MIT"
++    },
+     "node_modules/@types/react": {
+       "version": "19.3.0",
+       "resolved": "https://registry.npmjs.org/@types/react/-/react-19.3.0.tgz",
+       "integrity": "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "csstype": "^3.2.2"
+@@ -732,6 +1310,15 @@
+         "@types/react": "^19.3.0"
+       }
+     },
++    "node_modules/@types/react-transition-group": {
++      "version": "4.4.12",
++      "resolved": "https://registry.npmjs.org/@types/react-transition-group/-/react-transition-group-4.4.12.tgz",
++      "integrity": "sha512-8TV6R3h2j7a91c+1DXdJi3Syo69zzIZbz7Lg5tORM5LEJG7X/E6a1V3drRyBRZq7/utz7A+c4OgYLiLcYGHG6w==",
++      "license": "MIT",
++      "peerDependencies": {
++        "@types/react": "*"
++      }
++    },
+     "node_modules/@typescript/typescript-aix-ppc64": {
+       "version": "7.0.2",
+       "resolved": "https://registry.npmjs.org/@typescript/typescript-aix-ppc64/-/typescript-aix-ppc64-7.0.2.tgz",
+@@ -1102,13 +1689,93 @@
+         }
+       }
+     },
++    "node_modules/babel-plugin-macros": {
++      "version": "3.1.0",
++      "resolved": "https://registry.npmjs.org/babel-plugin-macros/-/babel-plugin-macros-3.1.0.tgz",
++      "integrity": "sha512-Cg7TFGpIr01vOQNODXOOaGz2NpCU5gl8x1qJFbb6hbZxR7XrcE2vtbAsTAbJ7/xwJtUuJEw8K8Zr/AE0LHlesg==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.12.5",
++        "cosmiconfig": "^7.0.0",
++        "resolve": "^1.19.0"
++      },
++      "engines": {
++        "node": ">=10",
++        "npm": ">=6"
++      }
++    },
++    "node_modules/callsites": {
++      "version": "3.1.0",
++      "resolved": "https://registry.npmjs.org/callsites/-/callsites-3.1.0.tgz",
++      "integrity": "sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6"
++      }
++    },
++    "node_modules/clsx": {
++      "version": "2.1.1",
++      "resolved": "https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz",
++      "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6"
++      }
++    },
++    "node_modules/convert-source-map": {
++      "version": "1.9.0",
++      "resolved": "https://registry.npmjs.org/convert-source-map/-/convert-source-map-1.9.0.tgz",
++      "integrity": "sha512-ASFBup0Mz1uyiIjANan1jzLQami9z1PoYSZCiiYW2FczPbenXc45FZdBZLzOT+r6+iciuEModtmCti+hjaAk0A==",
++      "license": "MIT"
++    },
++    "node_modules/cosmiconfig": {
++      "version": "7.1.0",
++      "resolved": "https://registry.npmjs.org/cosmiconfig/-/cosmiconfig-7.1.0.tgz",
++      "integrity": "sha512-AdmX6xUzdNASswsFtmwSt7Vj8po9IuqXm0UXz7QKPuEUmPB4XyjGfaAr2PSuELMwkRMVH1EpIkX5bTZGRB3eCA==",
++      "license": "MIT",
++      "dependencies": {
++        "@types/parse-json": "^4.0.0",
++        "import-fresh": "^3.2.1",
++        "parse-json": "^5.0.0",
++        "path-type": "^4.0.0",
++        "yaml": "^1.10.0"
++      },
++      "engines": {
++        "node": ">=10"
++      }
++    },
++    "node_modules/cosmiconfig/node_modules/yaml": {
++      "version": "1.10.3",
++      "resolved": "https://registry.npmjs.org/yaml/-/yaml-1.10.3.tgz",
++      "integrity": "sha512-vIYeF1u3CjlhAFekPPAk2h/Kv4T3mAkMox5OymRiJQB0spDP10LHvt+K7G9Ny6NuuMAb25/6n1qyUjAcGNf/AA==",
++      "license": "ISC",
++      "engines": {
++        "node": ">= 6"
++      }
++    },
+     "node_modules/csstype": {
+       "version": "3.2.4",
+       "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.4.tgz",
+       "integrity": "sha512-PoKaoPzQapnEoqUSnHx1u6W6ku8CVEgKsnpmmzU3m1nwkidpPBQ8V/Zq2+bWNrsOKoKLwTGdbx6xF7BXP1zLVQ==",
+-      "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/debug": {
++      "version": "4.4.3",
++      "resolved": "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz",
++      "integrity": "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
++      "license": "MIT",
++      "dependencies": {
++        "ms": "^2.1.3"
++      },
++      "engines": {
++        "node": ">=6.0"
++      },
++      "peerDependenciesMeta": {
++        "supports-color": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/detect-libc": {
+       "version": "2.1.2",
+       "resolved": "https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz",
+@@ -1119,6 +1786,46 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/dom-helpers": {
++      "version": "5.2.1",
++      "resolved": "https://registry.npmjs.org/dom-helpers/-/dom-helpers-5.2.1.tgz",
++      "integrity": "sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/runtime": "^7.8.7",
++        "csstype": "^3.0.2"
++      }
++    },
++    "node_modules/error-ex": {
++      "version": "1.3.4",
++      "resolved": "https://registry.npmjs.org/error-ex/-/error-ex-1.3.4.tgz",
++      "integrity": "sha512-sqQamAnR14VgCr1A618A3sGrygcpK+HEbenA/HiEAkkUwcZIIB/tgWqHFxWgOyDh4nB4JCRimh79dR5Ywc9MDQ==",
++      "license": "MIT",
++      "dependencies": {
++        "is-arrayish": "^0.2.1"
++      }
++    },
++    "node_modules/es-errors": {
++      "version": "1.3.0",
++      "resolved": "https://registry.npmjs.org/es-errors/-/es-errors-1.3.0.tgz",
++      "integrity": "sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 0.4"
++      }
++    },
++    "node_modules/escape-string-regexp": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/escape-string-regexp/-/escape-string-regexp-4.0.0.tgz",
++      "integrity": "sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=10"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
+     "node_modules/fdir": {
+       "version": "6.5.0",
+       "resolved": "https://registry.npmjs.org/fdir/-/fdir-6.5.0.tgz",
+@@ -1137,6 +1844,12 @@
+         }
+       }
+     },
++    "node_modules/find-root": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/find-root/-/find-root-1.1.0.tgz",
++      "integrity": "sha512-NKfW6bec6GfKc0SGx1e07QZY9PE99u0Bft/0rzSD5k3sO/vwkVUpDUKVm5Gpp5Ue3YfShPFTX2070tDs5kB9Ng==",
++      "license": "MIT"
++    },
+     "node_modules/fsevents": {
+       "version": "2.3.3",
+       "resolved": "https://registry.npmjs.org/fsevents/-/fsevents-2.3.3.tgz",
+@@ -1152,6 +1865,103 @@
+         "node": "^8.16.0 || ^10.6.0 || >=11.0.0"
+       }
+     },
++    "node_modules/function-bind": {
++      "version": "1.1.2",
++      "resolved": "https://registry.npmjs.org/function-bind/-/function-bind-1.1.2.tgz",
++      "integrity": "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==",
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/ljharb"
++      }
++    },
++    "node_modules/hasown": {
++      "version": "2.0.4",
++      "resolved": "https://registry.npmjs.org/hasown/-/hasown-2.0.4.tgz",
++      "integrity": "sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==",
++      "license": "MIT",
++      "dependencies": {
++        "function-bind": "^1.1.2"
++      },
++      "engines": {
++        "node": ">= 0.4"
++      }
++    },
++    "node_modules/hoist-non-react-statics": {
++      "version": "3.3.2",
++      "resolved": "https://registry.npmjs.org/hoist-non-react-statics/-/hoist-non-react-statics-3.3.2.tgz",
++      "integrity": "sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==",
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "react-is": "^16.7.0"
++      }
++    },
++    "node_modules/hoist-non-react-statics/node_modules/react-is": {
++      "version": "16.13.1",
++      "resolved": "https://registry.npmjs.org/react-is/-/react-is-16.13.1.tgz",
++      "integrity": "sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==",
++      "license": "MIT"
++    },
++    "node_modules/import-fresh": {
++      "version": "3.3.1",
++      "resolved": "https://registry.npmjs.org/import-fresh/-/import-fresh-3.3.1.tgz",
++      "integrity": "sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==",
++      "license": "MIT",
++      "dependencies": {
++        "parent-module": "^1.0.0",
++        "resolve-from": "^4.0.0"
++      },
++      "engines": {
++        "node": ">=6"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/is-arrayish": {
++      "version": "0.2.1",
++      "resolved": "https://registry.npmjs.org/is-arrayish/-/is-arrayish-0.2.1.tgz",
++      "integrity": "sha512-zz06S8t0ozoDXMG+ube26zeCTNXcKIPJZJi8hBrF4idCLms4CG9QtK7qBl1boi5ODzFpjswb5JPmHCbMpjaYzg==",
++      "license": "MIT"
++    },
++    "node_modules/is-core-module": {
++      "version": "2.18.0",
++      "resolved": "https://registry.npmjs.org/is-core-module/-/is-core-module-2.18.0.tgz",
++      "integrity": "sha512-qyax9fgaKOEC4qK8WZn7Q4IcoZC9RC1O1fFxRcRTq/oMMkWT/uXpqpXa12kzWR409zAt1drYN9N9BO26UmBCmw==",
++      "license": "MIT",
++      "dependencies": {
++        "hasown": "^2.0.4"
++      },
++      "engines": {
++        "node": ">= 0.4"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/ljharb"
++      }
++    },
++    "node_modules/js-tokens": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
++      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
++      "license": "MIT"
++    },
++    "node_modules/jsesc": {
++      "version": "3.1.0",
++      "resolved": "https://registry.npmjs.org/jsesc/-/jsesc-3.1.0.tgz",
++      "integrity": "sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==",
++      "license": "MIT",
++      "bin": {
++        "jsesc": "bin/jsesc"
++      },
++      "engines": {
++        "node": ">=6"
++      }
++    },
++    "node_modules/json-parse-even-better-errors": {
++      "version": "2.3.1",
++      "resolved": "https://registry.npmjs.org/json-parse-even-better-errors/-/json-parse-even-better-errors-2.3.1.tgz",
++      "integrity": "sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==",
++      "license": "MIT"
++    },
+     "node_modules/lightningcss": {
+       "version": "1.33.0",
+       "resolved": "https://registry.npmjs.org/lightningcss/-/lightningcss-1.33.0.tgz",
+@@ -1413,6 +2223,30 @@
+         "url": "https://opencollective.com/parcel"
+       }
+     },
++    "node_modules/lines-and-columns": {
++      "version": "1.2.4",
++      "resolved": "https://registry.npmjs.org/lines-and-columns/-/lines-and-columns-1.2.4.tgz",
++      "integrity": "sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==",
++      "license": "MIT"
++    },
++    "node_modules/loose-envify": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
++      "integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
++      "license": "MIT",
++      "dependencies": {
++        "js-tokens": "^3.0.0 || ^4.0.0"
++      },
++      "bin": {
++        "loose-envify": "cli.js"
++      }
++    },
++    "node_modules/ms": {
++      "version": "2.1.3",
++      "resolved": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
++      "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
++      "license": "MIT"
++    },
+     "node_modules/nanoid": {
+       "version": "3.3.20",
+       "resolved": "https://registry.npmjs.org/nanoid/-/nanoid-3.3.20.tgz",
+@@ -1432,6 +2266,15 @@
+         "node": "^10 || ^12 || ^13.7 || ^14 || >=15.0.1"
+       }
+     },
++    "node_modules/object-assign": {
++      "version": "4.1.1",
++      "resolved": "https://registry.npmjs.org/object-assign/-/object-assign-4.1.1.tgz",
++      "integrity": "sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
+     "node_modules/oxlint": {
+       "version": "1.94.0",
+       "resolved": "https://registry.npmjs.org/oxlint/-/oxlint-1.94.0.tgz",
+@@ -1481,11 +2324,55 @@
+         }
+       }
+     },
++    "node_modules/parent-module": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/parent-module/-/parent-module-1.0.1.tgz",
++      "integrity": "sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==",
++      "license": "MIT",
++      "dependencies": {
++        "callsites": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=6"
++      }
++    },
++    "node_modules/parse-json": {
++      "version": "5.2.0",
++      "resolved": "https://registry.npmjs.org/parse-json/-/parse-json-5.2.0.tgz",
++      "integrity": "sha512-ayCKvm/phCGxOkYRSCM82iDwct8/EonSEgCSxWxD7ve6jHggsFl4fZVQBPRNgQoKiuV/odhFrGzQXZwbifC8Rg==",
++      "license": "MIT",
++      "dependencies": {
++        "@babel/code-frame": "^7.0.0",
++        "error-ex": "^1.3.1",
++        "json-parse-even-better-errors": "^2.3.0",
++        "lines-and-columns": "^1.1.6"
++      },
++      "engines": {
++        "node": ">=8"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/sindresorhus"
++      }
++    },
++    "node_modules/path-parse": {
++      "version": "1.0.7",
++      "resolved": "https://registry.npmjs.org/path-parse/-/path-parse-1.0.7.tgz",
++      "integrity": "sha512-LDJzPVEEEPR+y48z93A0Ed0yXb8pAByGWo/k5YYdYgpY2/2EsOsksJrq7lOHxryrVOn1ejG6oAp8ahvOIQD8sw==",
++      "license": "MIT"
++    },
++    "node_modules/path-type": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/path-type/-/path-type-4.0.0.tgz",
++      "integrity": "sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=8"
++      }
++    },
+     "node_modules/picocolors": {
+       "version": "1.1.1",
+       "resolved": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+       "integrity": "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==",
+-      "dev": true,
+       "license": "ISC"
+     },
+     "node_modules/picomatch": {
+@@ -1530,6 +2417,23 @@
+         "node": "^10 || ^12 || >=14"
+       }
+     },
++    "node_modules/prop-types": {
++      "version": "15.8.1",
++      "resolved": "https://registry.npmjs.org/prop-types/-/prop-types-15.8.1.tgz",
++      "integrity": "sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==",
++      "license": "MIT",
++      "dependencies": {
++        "loose-envify": "^1.4.0",
++        "object-assign": "^4.1.1",
++        "react-is": "^16.13.1"
++      }
++    },
++    "node_modules/prop-types/node_modules/react-is": {
++      "version": "16.13.1",
++      "resolved": "https://registry.npmjs.org/react-is/-/react-is-16.13.1.tgz",
++      "integrity": "sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==",
++      "license": "MIT"
++    },
+     "node_modules/react": {
+       "version": "19.3.1",
+       "resolved": "https://registry.npmjs.org/react/-/react-19.3.1.tgz",
+@@ -1551,6 +2455,58 @@
+         "react": "^19.3.1"
+       }
+     },
++    "node_modules/react-is": {
++      "version": "19.3.1",
++      "resolved": "https://registry.npmjs.org/react-is/-/react-is-19.3.1.tgz",
++      "integrity": "sha512-RRieF6IyxQBkcK6pP8xOHprLTPW6QjRkbGdImtqNme+/hYVwCZkLQLdlZGOhUqXwkS9IEynaGvPJtv6XB/cz0Q==",
++      "license": "MIT"
++    },
++    "node_modules/react-transition-group": {
++      "version": "4.4.5",
++      "resolved": "https://registry.npmjs.org/react-transition-group/-/react-transition-group-4.4.5.tgz",
++      "integrity": "sha512-pZcd1MCJoiKiBR2NRxeCRg13uCXbydPnmB4EOeRrY7480qNWO8IIgQG6zlDkm6uRMsURXPuKq0GWtiM59a5Q6g==",
++      "license": "BSD-3-Clause",
++      "dependencies": {
++        "@babel/runtime": "^7.5.5",
++        "dom-helpers": "^5.0.1",
++        "loose-envify": "^1.4.0",
++        "prop-types": "^15.6.2"
++      },
++      "peerDependencies": {
++        "react": ">=16.6.0",
++        "react-dom": ">=16.6.0"
++      }
++    },
++    "node_modules/resolve": {
++      "version": "1.22.14",
++      "resolved": "https://registry.npmjs.org/resolve/-/resolve-1.22.14.tgz",
++      "integrity": "sha512-1ZjYvR9sbkiwC5+9QHetqW5HmA2pHRMaoupD01t2HlYnV/vydC2zPwLixhsMieSWVZt0JJRg5LVIk0Ow1D/TrA==",
++      "license": "MIT",
++      "dependencies": {
++        "es-errors": "^1.3.0",
++        "is-core-module": "^2.18.0",
++        "path-parse": "^1.0.7",
++        "supports-preserve-symlinks-flag": "^1.0.0"
++      },
++      "bin": {
++        "resolve": "bin/resolve"
++      },
++      "engines": {
++        "node": ">= 0.4"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/ljharb"
++      }
++    },
++    "node_modules/resolve-from": {
++      "version": "4.0.0",
++      "resolved": "https://registry.npmjs.org/resolve-from/-/resolve-from-4.0.0.tgz",
++      "integrity": "sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=4"
++      }
++    },
+     "node_modules/rolldown": {
+       "version": "1.2.19",
+       "resolved": "https://registry.npmjs.org/rolldown/-/rolldown-1.2.19.tgz",
+@@ -1592,6 +2548,15 @@
+       "integrity": "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==",
+       "license": "MIT"
+     },
++    "node_modules/source-map": {
++      "version": "0.5.7",
++      "resolved": "https://registry.npmjs.org/source-map/-/source-map-0.5.7.tgz",
++      "integrity": "sha512-LbrmJOMUSdEVxIKvdcJzQC+nQhe8FUZQTXQy6+I75skNgn3OoQ0DZA8YnFa7gp8tqtL3KPf1kmo0R5DoApeSGQ==",
++      "license": "BSD-3-Clause",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
+     "node_modules/source-map-js": {
+       "version": "1.2.4",
+       "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.4.tgz",
+@@ -1602,6 +2567,24 @@
+         "node": ">=6.0.0"
+       }
+     },
++    "node_modules/stylis": {
++      "version": "4.2.0",
++      "resolved": "https://registry.npmjs.org/stylis/-/stylis-4.2.0.tgz",
++      "integrity": "sha512-Orov6g6BB1sDfYgzWfTHDOxamtX1bE/zo104Dh9e6fqJ3PooipYyfJ0pUmrZO2wAvO8YbEyeFrkV91XTsGMSrw==",
++      "license": "MIT"
++    },
++    "node_modules/supports-preserve-symlinks-flag": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/supports-preserve-symlinks-flag/-/supports-preserve-symlinks-flag-1.0.0.tgz",
++      "integrity": "sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 0.4"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/ljharb"
++      }
++    },
+     "node_modules/tinyglobby": {
+       "version": "0.2.17",
+       "resolved": "https://registry.npmjs.org/tinyglobby/-/tinyglobby-0.2.17.tgz",
+@@ -1746,6 +2729,24 @@
+           "optional": true
+         }
+       }
++    },
++    "node_modules/yaml": {
++      "version": "2.9.1",
++      "resolved": "https://registry.npmjs.org/yaml/-/yaml-2.9.1.tgz",
++      "integrity": "sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==",
++      "dev": true,
++      "license": "ISC",
++      "optional": true,
++      "peer": true,
++      "bin": {
++        "yaml": "bin.mjs"
++      },
++      "engines": {
++        "node": ">= 14.6"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/eemeli"
++      }
+     }
+   }
+ }
+diff --git a/frontend/package.json b/frontend/package.json
+index 892cdd0..ebe2651 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -10,6 +10,10 @@
+     "preview": "vite preview"
+   },
+   "dependencies": {
++    "@emotion/react": "^11.14.0",
++    "@emotion/styled": "^11.14.1",
++    "@mui/icons-material": "^9.5.0",
++    "@mui/material": "^9.5.0",
+     "react": "^19.3.1",
+     "react-dom": "^19.3.1"
+   },
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index a2d94e5..5c02d83 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -1,7 +1,26 @@
++import AppBar from '@mui/material/AppBar'
++import Container from '@mui/material/Container'
++import Toolbar from '@mui/material/Toolbar'
++import Typography from '@mui/material/Typography'
++import MenuBookIcon from '@mui/icons-material/MenuBook'
+ import { LendCopyForm } from './lending/LendCopyForm'
+ 
+ function App() {
+-  return <LendCopyForm />
++  return (
++    <>
++      <AppBar position="static" elevation={0}>
++        <Toolbar>
++          <MenuBookIcon sx={{ mr: 1.5 }} aria-hidden />
++          <Typography variant="h6" component="span">
++            Biblioteca UCE · Préstamos
++          </Typography>
++        </Toolbar>
++      </AppBar>
++      <Container component="main" maxWidth="sm" sx={{ py: 4 }}>
++        <LendCopyForm />
++      </Container>
++    </>
++  )
+ }
+ 
+ export default App
+diff --git a/frontend/src/index.css b/frontend/src/index.css
+deleted file mode 100644
+index 89057ad..0000000
+--- a/frontend/src/index.css
++++ /dev/null
+@@ -1,52 +0,0 @@
+-:root {
+-  --text: #4b5563;
+-  --text-h: #111827;
+-  --bg: #f9fafb;
+-  --surface: #fff;
+-  --border: #d1d5db;
+-  --accent: #1d4ed8;
+-  --error: #b91c1c;
+-  --error-bg: #fee2e2;
+-  --success: #15803d;
+-  --success-bg: #dcfce7;
+-  --shadow: rgba(0, 0, 0, 0.08) 0 4px 12px;
+-
+-  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+-  color-scheme: light dark;
+-  color: var(--text);
+-  background: var(--bg);
+-}
+-
+-@media (prefers-color-scheme: dark) {
+-  :root {
+-    --text: #9ca3af;
+-    --text-h: #f3f4f6;
+-    --bg: #111827;
+-    --surface: #1f2937;
+-    --border: #374151;
+-    --accent: #3b82f6;
+-    --error: #fca5a5;
+-    --error-bg: #450a0a;
+-    --success: #86efac;
+-    --success-bg: #052e16;
+-  }
+-}
+-
+-*,
+-*::before,
+-*::after {
+-  box-sizing: border-box;
+-}
+-
+-body {
+-  margin: 0;
+-  background: var(--bg);
+-}
+-
+-#root {
+-  display: flex;
+-  justify-content: center;
+-  align-items: flex-start;
+-  min-height: 100svh;
+-  padding: 48px 16px;
+-}
+diff --git a/frontend/src/lending/LendCopyForm.css b/frontend/src/lending/LendCopyForm.css
+deleted file mode 100644
+index b3e90fb..0000000
+--- a/frontend/src/lending/LendCopyForm.css
++++ /dev/null
+@@ -1,76 +0,0 @@
+-.lend-copy {
+-  display: flex;
+-  flex-direction: column;
+-  gap: 16px;
+-  width: 100%;
+-  max-width: 400px;
+-  padding: 32px;
+-  border: 1px solid var(--border);
+-  border-radius: 12px;
+-  background: var(--surface);
+-  box-shadow: var(--shadow);
+-}
+-
+-.lend-copy h1 {
+-  margin: 0 0 8px;
+-  font-size: 1.5rem;
+-  color: var(--text-h);
+-}
+-
+-.lend-copy label {
+-  display: flex;
+-  flex-direction: column;
+-  gap: 6px;
+-  font-size: 0.9rem;
+-  font-weight: 600;
+-  color: var(--text-h);
+-}
+-
+-.lend-copy input {
+-  padding: 10px 12px;
+-  border: 1px solid var(--border);
+-  border-radius: 8px;
+-  font: inherit;
+-  font-weight: 400;
+-  color: var(--text-h);
+-  background: var(--bg);
+-}
+-
+-.lend-copy input:focus {
+-  outline: 2px solid var(--accent);
+-  outline-offset: 1px;
+-}
+-
+-.lend-copy button {
+-  margin-top: 8px;
+-  padding: 12px;
+-  border: none;
+-  border-radius: 8px;
+-  font: inherit;
+-  font-weight: 600;
+-  color: #fff;
+-  background: var(--accent);
+-  cursor: pointer;
+-}
+-
+-.lend-copy button:disabled {
+-  opacity: 0.6;
+-  cursor: progress;
+-}
+-
+-.lend-copy__message {
+-  margin: 0;
+-  padding: 10px 12px;
+-  border-radius: 8px;
+-  font-size: 0.9rem;
+-}
+-
+-.lend-copy__message--error {
+-  color: var(--error);
+-  background: var(--error-bg);
+-}
+-
+-.lend-copy__message--success {
+-  color: var(--success);
+-  background: var(--success-bg);
+-}
+diff --git a/frontend/src/lending/LendCopyForm.tsx b/frontend/src/lending/LendCopyForm.tsx
+index 3ed91c7..1afebe5 100644
+--- a/frontend/src/lending/LendCopyForm.tsx
++++ b/frontend/src/lending/LendCopyForm.tsx
+@@ -1,9 +1,22 @@
+ import { useState, type FormEvent } from 'react'
+-import { lendCopy, LendCopyError, type Loan } from './lendCopy'
+-import './LendCopyForm.css'
++import Alert, { type AlertColor } from '@mui/material/Alert'
++import AlertTitle from '@mui/material/AlertTitle'
++import Button from '@mui/material/Button'
++import Card from '@mui/material/Card'
++import CardContent from '@mui/material/CardContent'
++import Stack from '@mui/material/Stack'
++import TextField from '@mui/material/TextField'
++import Typography from '@mui/material/Typography'
++import { lendCopy, LendCopyError } from './lendCopy'
+ 
+ const DEFAULT_LOAN_DAYS = 15
+ 
++interface Outcome {
++  severity: AlertColor
++  title?: string
++  text: string
++}
++
+ function todayPlusDays(days: number): string {
+   const date = new Date()
+   date.setDate(date.getDate() + days)
+@@ -12,61 +25,114 @@ function todayPlusDays(days: number): string {
+   return `${date.getFullYear()}-${month}-${day}`
+ }
+ 
++/** "2026-12-10" -> "10/12/2026" */
++function formatDate(isoDate: string): string {
++  const [year, month, day] = isoDate.split('-')
++  return `${day}/${month}/${year}`
++}
++
++function outcomeForError(error: unknown): Outcome {
++  const notConnected: Outcome = {
++    severity: 'warning',
++    text: 'No pudimos conectar con el servidor. No se registró ningún préstamo.',
++  }
++  // fetch failed (TypeError) or the dev proxy/server answered 5xx: nothing was saved.
++  if (!(error instanceof LendCopyError) || error.status >= 500) {
++    return notConnected
++  }
++  switch (error.status) {
++    case 409:
++      return {
++        severity: 'error',
++        title: 'Ejemplar no disponible',
++        text: error.dueDate
++          ? `Este ejemplar no está disponible: está prestado hasta el ${formatDate(error.dueDate)}.`
++          : 'Este ejemplar no está disponible.',
++      }
++    case 404:
++      return { severity: 'error', text: 'No existe un ejemplar con ese código.' }
++    default:
++      return {
++        severity: 'error',
++        text: 'Revisa los datos: todos los campos son obligatorios y la fecha límite debe ser posterior a hoy.',
++      }
++  }
++}
++
+ export function LendCopyForm() {
+   const [copyCode, setCopyCode] = useState('')
+   const [memberId, setMemberId] = useState('')
+   const [dueDate, setDueDate] = useState(() => todayPlusDays(DEFAULT_LOAN_DAYS))
+   const [submitting, setSubmitting] = useState(false)
+-  const [error, setError] = useState<string | null>(null)
+-  const [loan, setLoan] = useState<Loan | null>(null)
++  const [outcome, setOutcome] = useState<Outcome | null>(null)
+ 
+   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+     event.preventDefault()
+     setSubmitting(true)
+-    setError(null)
+-    setLoan(null)
++    setOutcome(null)
+     try {
+-      setLoan(await lendCopy({ copyCode: copyCode.trim(), memberId: memberId.trim(), dueDate }))
++      const loan = await lendCopy({ copyCode: copyCode.trim(), memberId: memberId.trim(), dueDate })
++      setOutcome({
++        severity: 'success',
++        text: `Préstamo registrado. Devolver hasta el ${formatDate(loan.dueDate)}.`,
++      })
+     } catch (e) {
+-      setError(e instanceof LendCopyError ? e.message : 'Could not reach the server')
++      setOutcome(outcomeForError(e))
+     } finally {
+       setSubmitting(false)
+     }
+   }
+ 
+   return (
+-    <form className="lend-copy" onSubmit={handleSubmit}>
+-      <h1>Lend copy</h1>
++    <Card variant="outlined">
++      <CardContent>
++        <Stack component="form" spacing={3} onSubmit={handleSubmit}>
++          <Typography variant="h5" component="h1">
++            Prestar ejemplar
++          </Typography>
+ 
+-      <label>
+-        Copy code
+-        <input value={copyCode} onChange={(e) => setCopyCode(e.target.value)} placeholder="UCE-0001" required />
+-      </label>
++          <TextField
++            label="Código de ejemplar"
++            helperText="Escanea o escribe el código"
++            value={copyCode}
++            onChange={(e) => setCopyCode(e.target.value)}
++            placeholder="EJ-00123"
++            required
++            autoFocus
++            fullWidth
++          />
+ 
+-      <label>
+-        Member ID
+-        <input value={memberId} onChange={(e) => setMemberId(e.target.value)} placeholder="1712345678" required />
+-      </label>
++          <TextField
++            label="Lector (cédula o código)"
++            value={memberId}
++            onChange={(e) => setMemberId(e.target.value)}
++            placeholder="1712345678"
++            required
++            fullWidth
++          />
+ 
+-      <label>
+-        Due date
+-        <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+-      </label>
++          <TextField
++            label="Fecha límite de devolución"
++            type="date"
++            value={dueDate}
++            onChange={(e) => setDueDate(e.target.value)}
++            required
++            fullWidth
++            slotProps={{ inputLabel: { shrink: true } }}
++          />
+ 
+-      <button type="submit" disabled={submitting}>
+-        {submitting ? 'Lending…' : 'Lend'}
+-      </button>
++          <Button type="submit" variant="contained" size="large" disabled={submitting}>
++            Prestar
++          </Button>
+ 
+-      {error && (
+-        <p className="lend-copy__message lend-copy__message--error" role="alert">
+-          {error}
+-        </p>
+-      )}
+-      {loan && (
+-        <p className="lend-copy__message lend-copy__message--success" role="status">
+-          Copy {loan.copyCode} lent to Member {loan.memberId} until {loan.dueDate}.
+-        </p>
+-      )}
+-    </form>
++          {outcome && (
++            <Alert severity={outcome.severity} role={outcome.severity === 'success' ? 'status' : 'alert'}>
++              {outcome.title && <AlertTitle>{outcome.title}</AlertTitle>}
++              {outcome.text}
++            </Alert>
++          )}
++        </Stack>
++      </CardContent>
++    </Card>
+   )
+ }
+diff --git a/frontend/src/lending/lendCopy.ts b/frontend/src/lending/lendCopy.ts
+index f0b0105..df2e8e0 100644
+--- a/frontend/src/lending/lendCopy.ts
++++ b/frontend/src/lending/lendCopy.ts
+@@ -11,12 +11,15 @@ export interface Loan {
+   dueDate: string
+ }
+ 
++/** Error answered by the API: status code, English message and, for BR-01 (409), the due date of the active Loan. */
+ export class LendCopyError extends Error {
+   readonly status: number
++  readonly dueDate: string | null
+ 
+-  constructor(status: number, message: string) {
++  constructor(status: number, message: string, dueDate: string | null = null) {
+     super(message)
+     this.status = status
++    this.dueDate = dueDate
+   }
+ }
+ 
+@@ -28,8 +31,12 @@ export async function lendCopy(request: LendCopyRequest): Promise<Loan> {
+   })
+ 
+   if (!response.ok) {
+-    const body = (await response.json().catch(() => null)) as { message?: string } | null
+-    throw new LendCopyError(response.status, body?.message ?? `Unexpected error (${response.status})`)
++    const body = (await response.json().catch(() => null)) as { message?: string; dueDate?: string | null } | null
++    throw new LendCopyError(
++      response.status,
++      body?.message ?? `Unexpected error (${response.status})`,
++      body?.dueDate ?? null,
++    )
+   }
+ 
+   return (await response.json()) as Loan
+diff --git a/frontend/src/main.tsx b/frontend/src/main.tsx
+index bef5202..47c7ff0 100644
+--- a/frontend/src/main.tsx
++++ b/frontend/src/main.tsx
+@@ -1,10 +1,15 @@
+ import { StrictMode } from 'react'
+ import { createRoot } from 'react-dom/client'
+-import './index.css'
++import CssBaseline from '@mui/material/CssBaseline'
++import { ThemeProvider } from '@mui/material/styles'
+ import App from './App.tsx'
++import { theme } from './theme'
+ 
+ createRoot(document.getElementById('root')!).render(
+   <StrictMode>
+-    <App />
++    <ThemeProvider theme={theme}>
++      <CssBaseline />
++      <App />
++    </ThemeProvider>
+   </StrictMode>,
+ )
+diff --git a/frontend/src/theme.ts b/frontend/src/theme.ts
+new file mode 100644
+index 0000000..7c3455b
+--- /dev/null
++++ b/frontend/src/theme.ts
+@@ -0,0 +1,15 @@
++import { createTheme } from '@mui/material/styles'
++
++// Tokens from Figma ("03 Tokens") and Confluence page "4 · Línea gráfica".
++export const theme = createTheme({
++  palette: {
++    primary: { main: '#1F3A93', dark: '#172C70' },
++    success: { main: '#137333' },
++    error: { main: '#C5221F' },
++    warning: { main: '#F9AB00', contrastText: '#1F1F1F' },
++    text: { primary: '#1F1F1F', secondary: '#5F6368' },
++    divider: '#DADCE0',
++    background: { default: '#F8F9FA', paper: '#FFFFFF' },
++  },
++  shape: { borderRadius: 4 },
++})
+diff --git a/runbook-clase-intellij.md b/runbook-clase-intellij.md
+index 9db3025..c134370 100644
+--- a/runbook-clase-intellij.md
++++ b/runbook-clase-intellij.md
+@@ -63,13 +63,13 @@ npm install
+ npm run dev                                # http://localhost:5173 (proxy de /api al 8080)
+ ```
+ 
+-**Copias de ejemplo** (se cargan al arrancar): `UCE-0001`, `UCE-0002` y `UCE-0003` están Available; `UCE-0004` ya está prestada.
++**Ejemplares de ejemplo** (se cargan al arrancar, iguales a Figma): `EJ-00123` y `EJ-00124` están Disponibles; `EJ-00456` está prestado al lector `1700000004` hasta el 10/12/2026 (si esa fecha ya pasó, hasta hoy + 15 días).
+ 
+ **Provocar el 409 de BR-01:**
+ 
+ ```bash
+-curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"copyCode":"UCE-0004","memberId":"1712345678","dueDate":"2026-12-08"}'
+-# HTTP/1.1 409   {"message":"The copy is not available"}
++curl -i -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"copyCode":"EJ-00456","memberId":"1712345678","dueDate":"2026-12-08"}'
++# HTTP/1.1 409   {"message":"The copy is not available","dueDate":"2026-12-10"}
+ ```
+ 
+ ## Preparación previa (el día anterior)
+@@ -80,7 +80,7 @@ Prueba todo en la misma computadora y en la misma red que usarás en clase.
+ - [ ] Repo clonado, en la rama `develop`, abierto en IntelliJ con el JDK 25 y el proyecto Gradle importado (`backend/library`).
+ - [ ] `./gradlew test` en verde desde la terminal integrada (con `JAVA_HOME` apuntando al JDK 25).
+ - [ ] `npm install` y `npm run build` en verde en `frontend`.
+-- [ ] Ensayo del plan B: `git switch demo/respaldo`, arrancar backend y frontend, prestar `UCE-0001` desde la pantalla y provocar el error con `UCE-0004`. Volver a `develop`.
++- [ ] Ensayo del plan B: `git switch demo/respaldo`, arrancar backend y frontend, prestar `EJ-00123` desde la pantalla y provocar el error con `EJ-00456`. Volver a `develop`.
+ - [ ] Claude Code instalado y con la sesión iniciada; `claude` responde en la terminal integrada de IntelliJ.
+ - [ ] Plugin de Claude Code para JetBrains (opcional; si falla, basta la terminal integrada).
+ - [ ] Páginas 5 a 10 y "Figma · Pantalla Lend copy" en el espacio BIB del Confluence.
+@@ -240,7 +240,7 @@ y emitiendo los eventos de dominio. No implementes BR-03. Muéstrame el plan ant
+ 
+ **Si el MCP no conecta:** pide a Claude que lea `docs/confluence-demo-biblioteca.md`, que es la copia en Markdown de esas páginas.
+ 
+-**Cierre opcional (si sobra tiempo):** en `demo/respaldo`, arranca backend y frontend, presta `UCE-0001` desde la pantalla Lend copy y luego intenta `UCE-0004`: aparece "The copy is not available". La regla del agregado llega intacta hasta la interfaz.
++**Cierre opcional (si sobra tiempo):** en `demo/respaldo`, arranca backend y frontend, presta `EJ-00123` desde la pantalla Prestar ejemplar y luego intenta `EJ-00456`: aparece "Este ejemplar no está disponible: está prestado hasta el 10/12/2026." (la API responde en inglés con `dueDate` y la pantalla lo muestra en español). La regla del agregado llega intacta hasta la interfaz.
+ 
+ ## Plan B y problemas frecuentes
+ 
